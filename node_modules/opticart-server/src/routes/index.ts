@@ -10,6 +10,7 @@ import lowStockRouter from './lowStock.js';
 import auditLogRouter from './auditLog.js';
 import recommendationRouter from './recommendation.js';
 import orderRouter from './order.js';
+import productEventsRouter from './productEvents.js';
 import { authenticate, authorize } from '../middleware/auth.js';
 
 const router = Router();
@@ -46,11 +47,15 @@ router.use('/low-stock', lowStockRouter);
 // 9. Audit Logs routes
 router.use('/audit-logs', auditLogRouter);
 
-// 10. Product Recommendations routes
+// 10. Product Recommendations routes (read from cache — never compute sync)
 router.use('/product-recommendations', recommendationRouter);
 
 // 11. Orders and stripe transactional routes
 router.use('/orders', orderRouter);
+
+// 12. Product events (batched analytics writes — public, no auth required)
+router.use('/product-events', productEventsRouter);
+
 
 // Protected Stub Route to test access + RBAC (only accessible to Super Admins)
 router.get(

@@ -5,14 +5,18 @@ import { authenticate } from '../middleware/auth.js';
 
 const router = Router();
 
-// Rate limiting applies to all authentication and session endpoints
-router.use(authRateLimiter as any);
+// Rate limiting applied ONLY to the endpoints where repeated automated attempts
+// are a security concern: login, register, and forgot-password.
+// Critically, /refresh and /logout are NOT rate-limited here — they fire
+// automatically (silent refresh on mount, 401 interceptor retries) and must
+// never count against the user's login-attempt budget.
+router.post('/register', authRateLimiter as any, register);
+router.post('/login', authRateLimiter as any, login);
+router.post('/forgot-password', authRateLimiter as any, forgotPassword);
 
-router.post('/register', register);
-router.post('/login', login);
+// These do NOT touch the auth rate-limit counter:
 router.post('/refresh', refresh);
 router.post('/logout', logout);
-router.post('/forgot-password', forgotPassword);
 router.get('/profile', authenticate, getProfile);
 router.patch('/profile', authenticate, updateProfile);
 

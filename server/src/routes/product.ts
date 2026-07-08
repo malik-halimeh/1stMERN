@@ -3,6 +3,7 @@ import multer from 'multer';
 import {
   getProducts,
   getProductBySlug,
+  getProductsByIds,
   createProduct,
   updateProduct,
   deleteProduct,
@@ -20,6 +21,7 @@ const upload = multer({
 
 // Public endpoints
 router.get('/', getProducts);
+router.get('/by-ids', getProductsByIds); // Batch fetch by ObjectId array — public, no auth
 router.get('/:slug', getProductBySlug);
 
 // Manager endpoints

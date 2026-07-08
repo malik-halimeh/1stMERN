@@ -7,6 +7,8 @@ import Product from '../models/Product.js';
 import Coupon from '../models/Coupon.js';
 import LowStockAlert from '../models/LowStockAlert.js';
 import User from '../models/User.js';
+import ProductEvent from '../models/ProductEvent.js';
+import { sendOrderConfirmationEmail, sendOrderStatusChangeEmail } from '../services/mailer.js';
 import { AppError } from '../utils/errors.js';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_mock_key');
@@ -29,6 +31,12 @@ const checkAndTriggerLowStock = async (
         createdAt: new Date(),
       });
       console.log(`✓ Low stock alert created for Product: ${productId}, Variant SKU: ${variantSku}`);
+
+      // Fire low-stock email to all inventory managers (non-blocking)
+      const { sendLowStockAlertEmail } = await import('../services/mailer.js');
+      sendLowStockAlertEmail(variantSku, currentStock).catch((err: any) =>
+        console.error('Low stock email failed:', err.message)
+      );
     } catch (error: any) {
       if (error.code === 11000) {
         console.log(`Active low stock alert already exists for ${productId} (${variantSku}).`);
@@ -38,6 +46,7 @@ const checkAndTriggerLowStock = async (
     }
   }
 };
+
 
 // 1. POST /api/orders/checkout-session - Create Stripe PaymentIntent & Pending Order
 export const createCheckoutSession = async (req: Request, res: Response, next: NextFunction) => {
@@ -145,7 +154,7 @@ export const createCheckoutSession = async (req: Request, res: Response, next: N
       shippingAddress,
       status: 'pending',
       paymentStatus: 'pending',
-      stripePaymentIntentId: paymentIntentId,
+      paymentIntentId: paymentIntentId,
       couponCode: couponCode || null,
       createdAt: new Date(),
     });
@@ -196,7 +205,7 @@ export const stripeWebhook = async (req: Request, res: Response, next: NextFunct
       const paymentIntent = event.data.object;
       const paymentIntentId = paymentIntent.id;
 
-      const order = await Order.findOne({ stripePaymentIntentId: paymentIntentId });
+      const order = await Order.findOne({ paymentIntentId: paymentIntentId });
 
       if (order && order.status === 'pending') {
         // Transition order state
@@ -239,9 +248,32 @@ export const stripeWebhook = async (req: Request, res: Response, next: NextFunct
 
         // Clear user cart items
         await Cart.updateOne({ userId: order.userId }, { $set: { items: [] } });
-        
+
+        // Record productEvent 'purchase' per item for recommendation engine
+        try {
+          const purchaseEvents = order.items.map((item) => ({
+            userId: order.userId,
+            productId: item.productId,
+            eventType: 'purchase' as const,
+            timestamp: new Date(),
+          }));
+          await ProductEvent.insertMany(purchaseEvents);
+        } catch (evtErr: any) {
+          console.error('Failed to record purchase events:', evtErr.message);
+        }
+
         await order.save();
         console.log(`✓ Order ${order.orderNumber} successfully confirmed via webhook!`);
+
+        // Fire order confirmation email (non-blocking)
+        try {
+          const buyer = await User.findById(order.userId);
+          if (buyer) {
+            sendOrderConfirmationEmail(buyer.email, order.orderNumber, order.totalCents);
+          }
+        } catch (mailErr: any) {
+          console.error('Failed to send confirmation email:', mailErr.message);
+        }
       }
     }
 
@@ -255,7 +287,7 @@ export const stripeWebhook = async (req: Request, res: Response, next: NextFunct
 export const getOrderStatus = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { paymentIntentId } = req.params;
-    const order = await Order.findOne({ stripePaymentIntentId: paymentIntentId });
+    const order = await Order.findOne({ paymentIntentId: paymentIntentId });
 
     if (!order) {
       return res.status(200).json({
@@ -340,3 +372,87 @@ export const getOrderDetails = async (req: Request, res: Response, next: NextFun
     next(error);
   }
 };
+
+// 6. PATCH /api/orders/:id/status - Inventory Manager Only
+// Valid transitions: confirmed→processing→shipped→delivered | any→cancelled | any→refunded
+export const updateOrderStatus = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) {
+      throw new AppError('AUTH_UNAUTHORIZED', 'Session is not authenticated.', 401);
+    }
+
+    const { id } = req.params;
+    const { status, note } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new AppError('VALIDATION_FAILED', 'Invalid order ID format.', 422);
+    }
+
+    const validStatuses = ['confirmed', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded'];
+    if (!status || !validStatuses.includes(status)) {
+      throw new AppError('VALIDATION_FAILED', `Status must be one of: ${validStatuses.join(', ')}.`, 422);
+    }
+
+    const order = await Order.findById(id);
+    if (!order) {
+      throw new AppError('ORDER_NOT_FOUND', 'Order not found.', 404);
+    }
+
+    // State machine guard: cannot move backwards or change from terminal states
+    const terminalStatuses = ['delivered', 'cancelled', 'refunded'];
+    if (terminalStatuses.includes(order.status)) {
+      throw new AppError('ORDER_STATUS_LOCKED', `Order is already in terminal state: ${order.status}.`, 409);
+    }
+
+    const prevStatus = order.status;
+    order.status = status as any;
+
+    // Timestamp terminal transitions
+    if (status === 'delivered') order.deliveredAt = new Date();
+    if (status === 'cancelled') order.cancelledAt = new Date();
+
+    // Append statusHistory entry
+    order.statusHistory.push({
+      status,
+      timestamp: new Date(),
+      note: note || `Status updated to ${status}.`,
+      updatedBy: new mongoose.Types.ObjectId(req.user.userId),
+    });
+
+    await order.save();
+
+    // Write AuditLog
+    try {
+      const AuditLog = (await import('../models/AuditLog.js')).default;
+      const actor = await User.findById(req.user.userId);
+      await AuditLog.create({
+        actorId: new mongoose.Types.ObjectId(req.user.userId),
+        actorName: actor?.name || 'Inventory Manager',
+        actionType: 'order_status_change',
+        targetEntityType: 'Order',
+        targetEntityId: order._id,
+        changeDelta: { before: { status: prevStatus }, after: { status } },
+      });
+    } catch (auditErr: any) {
+      console.error('Failed to write audit log for order status change:', auditErr.message);
+    }
+
+    // Fire status-change email (non-blocking)
+    try {
+      const buyer = await User.findById(order.userId);
+      if (buyer && ['shipped', 'delivered', 'cancelled', 'refunded'].includes(status)) {
+        sendOrderStatusChangeEmail(buyer.email, order.orderNumber, status);
+      }
+    } catch (mailErr: any) {
+      console.error('Failed to send status change email:', mailErr.message);
+    }
+
+    res.status(200).json({
+      success: true,
+      data: order,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+

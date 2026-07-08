@@ -119,7 +119,7 @@ export const createCheckoutSession = async (req, res, next) => {
             shippingAddress,
             status: 'pending',
             paymentStatus: 'pending',
-            stripePaymentIntentId: paymentIntentId,
+            paymentIntentId: paymentIntentId,
             couponCode: couponCode || null,
             createdAt: new Date(),
         });
@@ -167,7 +167,7 @@ export const stripeWebhook = async (req, res, next) => {
         if (event.type === 'payment_intent.succeeded') {
             const paymentIntent = event.data.object;
             const paymentIntentId = paymentIntent.id;
-            const order = await Order.findOne({ stripePaymentIntentId: paymentIntentId });
+            const order = await Order.findOne({ paymentIntentId: paymentIntentId });
             if (order && order.status === 'pending') {
                 // Transition order state
                 order.status = 'confirmed';
@@ -215,7 +215,7 @@ export const stripeWebhook = async (req, res, next) => {
 export const getOrderStatus = async (req, res, next) => {
     try {
         const { paymentIntentId } = req.params;
-        const order = await Order.findOne({ stripePaymentIntentId: paymentIntentId });
+        const order = await Order.findOne({ paymentIntentId: paymentIntentId });
         if (!order) {
             return res.status(200).json({
                 success: true,

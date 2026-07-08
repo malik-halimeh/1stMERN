@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import {
   LayoutDashboard,
   Package,
@@ -17,14 +18,12 @@ import {
   Menu,
   X
 } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext.js';
 
 export type AdminRole = 'inventory_manager' | 'super_admin';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
-  role?: AdminRole;
-  userEmail?: string;
-  userName?: string;
   activePath?: string;
 }
 
@@ -95,11 +94,15 @@ const NAV_ITEMS: NavItem[] = [
 
 const AdminLayout: React.FC<AdminLayoutProps> = ({
   children,
-  role = 'super_admin',
-  userEmail = 'admin@opticart.com',
-  userName = 'Sarah Jenkins',
   activePath = '/admin/dashboard',
 }) => {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  // Derive display values from the authenticated user
+  const role: AdminRole = (user?.role as AdminRole) ?? 'inventory_manager';
+  const userName = user?.name || 'Admin';
+  const userEmail = user?.email || '';
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -107,9 +110,13 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({
   // Filter items matching current user role
   const filteredNavItems = NAV_ITEMS.filter((item) => item.roles.includes(role));
 
-  const handleLogout = () => {
-    console.log('Logging out admin session...');
-    // Logout logic placeholder
+  const handleLogout = async () => {
+    try {
+      await logout(); // clears in-memory token + calls POST /api/auth/logout
+    } catch {
+      // logout already swallows errors; navigate regardless
+    }
+    navigate('/login');
   };
 
   const SidebarContent = () => (
@@ -119,9 +126,9 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({
         {/* Sidebar Header */}
         <div className={`p-4 border-b border-white/10 flex items-center justify-between ${isCollapsed ? 'justify-center' : ''}`}>
           {!isCollapsed && (
-            <a href="/admin/dashboard" className="text-h3 font-bold tracking-tight text-white select-none">
+            <Link to="/admin/dashboard" className="text-h3 font-bold tracking-tight text-white select-none">
               OptiCart <span className="text-primary text-sm font-semibold block uppercase">Admin Portal</span>
-            </a>
+            </Link>
           )}
           {isCollapsed && (
             <span className="h-8 w-8 rounded-btn bg-primary flex items-center justify-center font-bold text-lg select-none">
@@ -151,9 +158,9 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({
           {filteredNavItems.map((item) => {
             const isActive = activePath === item.href;
             return (
-              <a
+              <Link
                 key={item.label}
-                href={item.href}
+                to={item.href}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-btn text-secondary font-medium transition-all group ${
                   isActive
                     ? 'bg-primary text-white'
@@ -165,7 +172,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({
                   {item.icon}
                 </span>
                 {!isCollapsed && <span className="truncate">{item.label}</span>}
-              </a>
+              </Link>
             );
           })}
         </nav>
@@ -256,12 +263,13 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({
                   <p className="text-caption text-text-muted truncate">{userEmail}</p>
                 </div>
                 <div className="mt-2 flex flex-col gap-1">
-                  <a
-                    href="/admin/profile"
+                  <Link
+                    to="/admin/profile"
                     className="flex items-center gap-2 px-3 py-2 hover:bg-dashboard-section-bg text-secondary text-sm rounded-btn"
+                    onClick={() => setShowProfileMenu(false)}
                   >
                     <User className="h-4 w-4 text-text-muted" /> Profile Settings
-                  </a>
+                  </Link>
                   <button
                     onClick={handleLogout}
                     className="w-full text-left flex items-center gap-2 px-3 py-2 hover:bg-red-50 text-danger text-sm rounded-btn"

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import StorefrontLayout from '../components/layout/StorefrontLayout.js';
 import Skeleton from '../components/ui/Skeleton.js';
@@ -9,8 +9,36 @@ import ProductCard from '../components/ui/ProductCard.js';
 import type { ProductDoc, ProductVariant } from '../components/ui/ProductCard.js';
 import { useToast } from '../context/ToastContext.js';
 import { useAuth } from '../context/AuthContext.js';
+import { addToGuestWishlist } from './Wishlist.js';
 import api from '../services/api.js';
 import { Star, ShoppingCart, Heart, Plus, Minus, MessageSquare, ShieldCheck } from 'lucide-react';
+
+// ─── View event batching (module-level) ──────────────────────────────────────
+// Events are buffered here; flushed after FLUSH_DELAY_MS of inactivity OR on page unload.
+const VIEW_EVENT_BUFFER: { productId: string; eventType: 'view' }[] = [];
+const FLUSH_DELAY_MS = 10_000;
+let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+const flushViewEvents = async (): Promise<void> => {
+  if (VIEW_EVENT_BUFFER.length === 0) return;
+  const batch = VIEW_EVENT_BUFFER.splice(0);
+  try {
+    await api.post('/product-events/batch', { events: batch });
+  } catch {
+    // Silent — product events are analytics-only, never block UX
+  }
+};
+
+const scheduleFlush = () => {
+  if (flushTimer) clearTimeout(flushTimer);
+  flushTimer = setTimeout(flushViewEvents, FLUSH_DELAY_MS);
+};
+
+// Flush on tab/window close
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', () => { flushViewEvents(); });
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 interface ReviewDoc {
   _id: string;
@@ -88,6 +116,18 @@ const ProductDetail: React.FC = () => {
     };
     if (slug) fetchProductDetails();
   }, [slug]);
+
+  // Batched view-event tracking: enqueue on product load, flush after 10s or unload
+  useEffect(() => {
+    if (!product) return;
+    VIEW_EVENT_BUFFER.push({ productId: product._id, eventType: 'view' });
+    scheduleFlush();
+    return () => {
+      // If navigating away before timer fires, flush immediately
+      if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
+      flushViewEvents();
+    };
+  }, [product?._id]);
 
   // Fetch reviews when product or reviewsPage shifts
   useEffect(() => {
@@ -177,20 +217,26 @@ const ProductDetail: React.FC = () => {
     }
   };
 
-  // Add to Wishlist handler
+  // Add to Wishlist handler — guest: localStorage; auth: API
   const handleAddToWishlist = async () => {
     if (!product) return;
+    if (!user) {
+      const added = addToGuestWishlist(product._id);
+      if (added) {
+        addToast('Item saved to your local wishlist! Sign in to sync across devices.', 'success');
+      } else {
+        addToast('Item is already in your wishlist.', 'info');
+      }
+      return;
+    }
     try {
       const res = await api.post(`/wishlist/${product._id}`);
       if (res.data?.success) {
         addToast('Added item to your wishlist!', 'success');
       }
     } catch (err: any) {
-      const msg = err.response?.data?.error?.message || 'Please log in to update your wishlist.';
-      addToast(msg, err.response?.status === 401 ? 'warning' : 'error');
-      if (err.response?.status === 401) {
-        navigate(`/login?redirect=${encodeURIComponent(window.location.pathname)}`);
-      }
+      const msg = err.response?.data?.error?.message || 'Failed to update wishlist.';
+      addToast(msg, 'error');
     }
   };
 

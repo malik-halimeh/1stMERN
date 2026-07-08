@@ -1,20 +1,11 @@
-import { useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
-import { Eye, Trash, Plus } from 'lucide-react';
-
-// UI components
-import Button from './components/ui/Button.js';
-import { DataTable } from './components/ui/DataTable.js';
-import type { Column } from './components/ui/DataTable.js';
-import Badge from './components/ui/Badge.js';
-import type { BadgeVariant } from './components/ui/Badge.js';
+import React from 'react';
+import { Navigate, BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 
 // Layouts
 import AdminLayout from './components/layout/AdminLayout.js';
-import type { AdminRole } from './components/layout/AdminLayout.js';
 
-// Toast Context
-import { useToast } from './context/ToastContext.js';
+// Auth
+import { useAuth } from './context/AuthContext.js';
 
 // Pages
 import Home from './pages/Home.js';
@@ -31,184 +22,220 @@ import AccountDashboard from './pages/AccountDashboard.js';
 import OrderDetail from './pages/OrderDetail.js';
 import Wishlist from './pages/Wishlist.js';
 
-// Mock inventory data for DataTable showcase in Admin Portal
-interface ProductRow {
-  sku: string;
-  name: string;
-  category: string;
-  price: number;
-  stock: number;
-  status: 'In Stock' | 'Low Stock' | 'Out of Stock';
-}
+// --------------------------------------------------------------------------
+// Route Guards
+// --------------------------------------------------------------------------
 
-const MOCK_INVENTORY: ProductRow[] = [
-  { sku: 'REF-RF29-SS', name: 'French Door Refrigerator 29 cu. ft.', category: 'Refrigerators', price: 1899.0, stock: 12, status: 'In Stock' },
-  { sku: 'RNG-IND-30', name: 'Smart Induction Slide-in Range', category: 'Ranges & Ovens', price: 1249.0, stock: 5, status: 'Low Stock' },
-  { sku: 'DSH-BLT-Quiet', name: 'Built-in Dishwasher 44dBA', category: 'Dishwashers', price: 799.0, stock: 0, status: 'Out of Stock' },
-  { sku: 'WSH-DRY-FL', name: 'Front Load Washer & Dryer Combo', category: 'Washers & Dryers', price: 2199.0, stock: 8, status: 'In Stock' },
-  { sku: 'MIC-CONV-15', name: 'Convection Microwave Oven 1.5 cu. ft.', category: 'Microwaves', price: 299.0, stock: 24, status: 'In Stock' },
-  { sku: 'COF-ESP-Bar', name: 'Espresso Bar Coffee Machine', category: 'Coffee Makers', price: 599.0, stock: 3, status: 'Low Stock' },
-  { sku: 'BLD-PRO-1000', name: 'Professional High-Speed Blender', category: 'Blenders & Juicers', price: 189.0, stock: 15, status: 'In Stock' },
-  { sku: 'TST-TOUCH-4', name: 'Touchscreen Toaster 4-Slice', category: 'Toasters & Ovens', price: 89.0, stock: 18, status: 'In Stock' },
-];
+/**
+ * Redirects unauthenticated users to /login.
+ * Redirects authenticated users with wrong role to the homepage.
+ */
+const ProtectedRoute: React.FC<{
+  children: React.ReactNode;
+  requiredRoles?: Array<'customer' | 'inventory_manager' | 'super_admin'>;
+}> = ({ children, requiredRoles }) => {
+  const { isAuthenticated, isLoading, user } = useAuth();
 
-function App() {
-  const { addToast } = useToast();
-  const [adminRole, setAdminRole] = useState<AdminRole>('super_admin');
-  const [selectedProducts, setSelectedProducts] = useState<ProductRow[]>([]);
+  if (isLoading) {
+    return null;
+  }
 
-  // Columns for DataTable
-  const inventoryColumns: Column<ProductRow>[] = [
-    { key: 'sku', label: 'SKU', sortable: true },
-    { key: 'name', label: 'Product Name', sortable: true },
-    { key: 'category', label: 'Category', sortable: true },
-    {
-      key: 'price',
-      label: 'Price',
-      sortable: true,
-      render: (row) => <span>${row.price.toFixed(2)}</span>
-    },
-    { key: 'stock', label: 'Stock Qty', sortable: true },
-    {
-      key: 'status',
-      label: 'Status',
-      sortable: true,
-      render: (row) => {
-        let badgeVar: BadgeVariant = 'neutral';
-        if (row.status === 'In Stock') badgeVar = 'success';
-        if (row.status === 'Low Stock') badgeVar = 'warning';
-        if (row.status === 'Out of Stock') badgeVar = 'danger';
-        return <Badge variant={badgeVar}>{row.status}</Badge>;
-      }
-    },
-    {
-      key: 'actions',
-      label: 'Actions',
-      render: (row) => (
-        <div className="flex gap-2">
-          <Button
-            variant="ghost"
-            onClick={() => addToast(`Viewing item: ${row.name}`, 'info')}
-            icon={<Eye className="h-4 w-4" />}
-            className="p-1"
-          />
-          <Button
-            variant="ghost"
-            onClick={() => addToast(`Deleted mock item: ${row.sku}`, 'error')}
-            icon={<Trash className="h-4 w-4 text-danger" />}
-            className="p-1"
-          />
-        </div>
-      )
-    }
-  ];
+  if (!isAuthenticated) {
+    return (
+      <Navigate
+        to={`/login?redirect=${encodeURIComponent(window.location.pathname)}`}
+        replace
+      />
+    );
+  }
 
-  // Admin Dashboard view component
-  const AdminDashboard = () => (
-    <AdminLayout role={adminRole} activePath="/admin/products">
-      <div className="flex flex-col gap-6">
-        {/* Top Welcome Title */}
-        <div className="bg-surface p-6 rounded-card border border-dashboard-section-bg/50 shadow-level1 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 text-left">
-          <div>
-            <h1 className="text-h1 font-bold text-primary-dark">Admin Inventory Control</h1>
-            <p className="text-caption text-text-secondary mt-1">
-              Super Admin and Inventory Manager control center. Manage stock, active coupons, and alerts.
-            </p>
-          </div>
+  if (requiredRoles && user && !requiredRoles.includes(user.role)) {
+    return <Navigate to="/" replace />;
+  }
 
-          {/* Role Toggle for Showcase */}
-          <div className="flex gap-2 items-center bg-dashboard-section-bg p-1.5 rounded-btn select-none">
-            <span className="text-caption text-text-secondary font-bold px-2">Role:</span>
-            <button
-              onClick={() => { setAdminRole('inventory_manager'); addToast('Switched role to Inventory Manager', 'info'); }}
-              className={`px-3 py-1 rounded-btn text-xs font-semibold transition-all ${
-                adminRole === 'inventory_manager' ? 'bg-primary-dark text-white' : 'hover:bg-white/40 text-text-secondary'
-              }`}
-            >
-              Inventory Manager
-            </button>
-            <button
-              onClick={() => { setAdminRole('super_admin'); addToast('Switched role to Super Admin', 'info'); }}
-              className={`px-3 py-1 rounded-btn text-xs font-semibold transition-all ${
-                adminRole === 'super_admin' ? 'bg-primary-dark text-white' : 'hover:bg-white/40 text-text-secondary'
-              }`}
-            >
-              Super Admin
-            </button>
-          </div>
-        </div>
+  return <>{children}</>;
+};
 
-        {/* Reusable DataTable Component Showcase */}
-        <div className="flex flex-col gap-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-section-title font-semibold">Products Inventory Table</h2>
-            <Button
-              variant="primary"
-              onClick={() => addToast('Adding new mock item...', 'info')}
-              icon={<Plus className="h-4 w-4" />}
-            >
-              Add Product
-            </Button>
-          </div>
+// --------------------------------------------------------------------------
+// Admin page components
+// Each admin path renders its own AdminPage so the sidebar highlights
+// correctly and navigating between /admin/* paths re-renders the content
+// without a full browser reload.
+// --------------------------------------------------------------------------
 
-          <DataTable
-            columns={inventoryColumns}
-            data={MOCK_INVENTORY}
-            keyField="sku"
-            onSelectionChange={(selected) => setSelectedProducts(selected)}
-            rowsPerPageDefault={5}
-          />
-
-          {selectedProducts.length > 0 && (
-            <div className="bg-primary-dark text-white p-4 rounded-card flex justify-between items-center animate-scale-in">
-              <span className="text-sm font-semibold">{selectedProducts.length} items selected for bulk actions</span>
-              <div className="flex gap-2">
-                <Button variant="ghost" className="text-white hover:bg-white/10" onClick={() => addToast(`Bulk update triggering on: ${selectedProducts.map((p) => p.sku).join(', ')}`, 'info')}>
-                  Update Status
-                </Button>
-                <Button variant="danger" onClick={() => { addToast('Bulk deleted mock items.', 'error'); setSelectedProducts([]); }}>
-                  Delete Selected
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
+/** Reads the current pathname and passes it as activePath to AdminLayout */
+const AdminPage: React.FC<{ title: string; description?: string }> = ({ title, description }) => {
+  const { pathname } = useLocation();
+  return (
+    <AdminLayout activePath={pathname}>
+      <div className="flex flex-col gap-4">
+        <h1 className="text-h1 font-bold text-primary-dark">{title}</h1>
+        {description && <p className="text-text-secondary">{description}</p>}
       </div>
     </AdminLayout>
   );
+};
 
+/** Wraps an AdminPage in the role-guard so each route stays DRY */
+const AdminRoute: React.FC<{ title: string; description?: string }> = (props) => (
+  <ProtectedRoute requiredRoles={['inventory_manager', 'super_admin']}>
+    <AdminPage {...props} />
+  </ProtectedRoute>
+);
+
+// --------------------------------------------------------------------------
+// App — routing tree
+// --------------------------------------------------------------------------
+
+function App() {
   return (
     <Router>
-      <div className="relative min-h-screen">
-        {/* Floating Developer Toolbar Switcher link */}
-        <div className="fixed bottom-6 left-6 z-50 bg-primary-dark border border-white/20 px-3 py-2 rounded-modal shadow-level3 flex items-center gap-3 text-white font-sans text-xs select-none">
-          <span className="font-semibold text-text-muted">Portals:</span>
-          <Link to="/" className="text-white font-bold hover:text-secondary hover:underline transition-colors">Store</Link>
-          <div className="h-4 w-px bg-white/20" />
-          <Link to="/admin" className="text-white font-bold hover:text-secondary hover:underline transition-colors">Admin</Link>
-        </div>
+      <Routes>
+        {/* ── Storefront Routes ── */}
+        <Route path="/" element={<Home />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/products" element={<ProductList />} />
+        <Route path="/products/:slug" element={<ProductDetail />} />
+        <Route path="/cart" element={<Cart />} />
+        <Route path="/wishlist" element={<Wishlist />} />
 
-        <Routes>
-          {/* Storefront Routes */}
-          <Route path="/" element={<Home />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
-          <Route path="/products" element={<ProductList />} />
-          <Route path="/products/:slug" element={<ProductDetail />} />
-          <Route path="/cart" element={<Cart />} />
-          <Route path="/checkout" element={<Checkout />} />
-          <Route path="/checkout-redirect" element={<CheckoutRedirect />} />
-          <Route path="/order-confirmation/:id" element={<OrderConfirmation />} />
-          <Route path="/account" element={<AccountDashboard />} />
-          <Route path="/orders/:id" element={<OrderDetail />} />
-          <Route path="/wishlist" element={<Wishlist />} />
+        {/* Customer-only protected routes */}
+        <Route
+          path="/checkout"
+          element={
+            <ProtectedRoute>
+              <Checkout />
+            </ProtectedRoute>
+          }
+        />
+        <Route path="/checkout-redirect" element={<CheckoutRedirect />} />
+        <Route
+          path="/order-confirmation/:id"
+          element={
+            <ProtectedRoute>
+              <OrderConfirmation />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/account"
+          element={
+            <ProtectedRoute>
+              <AccountDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/orders/:id"
+          element={
+            <ProtectedRoute>
+              <OrderDetail />
+            </ProtectedRoute>
+          }
+        />
 
-          {/* Admin Routes */}
-          <Route path="/admin" element={<AdminDashboard />} />
-          <Route path="/admin/*" element={<AdminDashboard />} />
-        </Routes>
-      </div>
+        {/* ── Admin Routes ──────────────────────────────────────────────────
+            Every path gets its OWN route so navigating between admin sections
+            triggers a component re-render without a browser reload.
+            /admin (bare) redirects to /admin/dashboard. */}
+        <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
+
+        <Route
+          path="/admin/dashboard"
+          element={
+            <AdminRoute
+              title="Admin Dashboard"
+              description="Overview of orders, inventory, and platform activity."
+            />
+          }
+        />
+        <Route
+          path="/admin/products"
+          element={
+            <AdminRoute
+              title="Products"
+              description="Manage your appliance catalog — add, edit, and remove products."
+            />
+          }
+        />
+        <Route
+          path="/admin/orders"
+          element={
+            <AdminRoute
+              title="Orders"
+              description="View and advance order statuses across all customers."
+            />
+          }
+        />
+        <Route
+          path="/admin/low-stock"
+          element={
+            <AdminRoute
+              title="Low Stock Alerts"
+              description="Monitor variants that have fallen below their stock threshold."
+            />
+          }
+        />
+        <Route
+          path="/admin/coupons"
+          element={
+            <AdminRoute
+              title="Coupons"
+              description="Create, edit, and deactivate discount coupon codes."
+            />
+          }
+        />
+        <Route
+          path="/admin/reviews"
+          element={
+            <AdminRoute
+              title="Reviews"
+              description="Moderate customer product reviews."
+            />
+          }
+        />
+        <Route
+          path="/admin/users"
+          element={
+            <AdminRoute
+              title="Users"
+              description="Manage platform accounts and role assignments."
+            />
+          }
+        />
+        <Route
+          path="/admin/audit-logs"
+          element={
+            <AdminRoute
+              title="Audit Logs"
+              description="Immutable record of all privileged administrative actions."
+            />
+          }
+        />
+        <Route
+          path="/admin/analytics"
+          element={
+            <AdminRoute
+              title="Analytics"
+              description="Revenue trends, top products, and customer activity reports."
+            />
+          }
+        />
+        <Route
+          path="/admin/profile"
+          element={
+            <AdminRoute
+              title="Profile Settings"
+              description="Update your admin account details."
+            />
+          }
+        />
+
+        {/* Catch-all → home */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
     </Router>
   );
 }

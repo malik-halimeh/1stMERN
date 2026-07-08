@@ -107,3 +107,48 @@ export const removeFromWishlist = async (req: Request, res: Response, next: Next
     next(error);
   }
 };
+
+// 4. POST /api/wishlist/merge - Merge guest local wishlist into authenticated wishlist
+export const mergeWishlist = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) {
+      throw new AppError('AUTH_UNAUTHORIZED', 'Customer session is not authenticated.', 401);
+    }
+
+    const { productIds } = req.body;
+
+    if (!Array.isArray(productIds)) {
+      throw new AppError('VALIDATION_FAILED', 'productIds must be an array.', 422);
+    }
+
+    // Validate and filter to existing products only
+    const validIds = productIds
+      .filter((id: any) => typeof id === 'string' && mongoose.Types.ObjectId.isValid(id))
+      .map((id: string) => new mongoose.Types.ObjectId(id));
+
+    const userId = new mongoose.Types.ObjectId(req.user.userId);
+    let wishlist = await Wishlist.findOne({ userId });
+
+    if (!wishlist) {
+      wishlist = await Wishlist.create({ userId, productIds: [] });
+    }
+
+    // De-duplicate: only add IDs not already in the wishlist
+    const existingSet = new Set(wishlist.productIds.map((id) => id.toString()));
+    for (const id of validIds) {
+      if (!existingSet.has(id.toString())) {
+        wishlist.productIds.push(id);
+        existingSet.add(id.toString());
+      }
+    }
+
+    await wishlist.save();
+
+    res.status(200).json({
+      success: true,
+      data: { merged: validIds.length },
+    });
+  } catch (error) {
+    next(error);
+  }
+};

@@ -6,6 +6,8 @@ import type { ProductDoc } from '../components/ui/ProductCard.js';
 import Skeleton from '../components/ui/Skeleton.js';
 import Button from '../components/ui/Button.js';
 import { useToast } from '../context/ToastContext.js';
+import { useAuth } from '../context/AuthContext.js';
+import { addToGuestWishlist } from './Wishlist.js';
 import api from '../services/api.js';
 import { ArrowRight, ChevronLeft, ChevronRight, Percent, Award, ShieldCheck } from 'lucide-react';
 
@@ -53,6 +55,7 @@ const Home: React.FC = () => {
   const [loadingRecs, setLoadingRecs] = useState(true);
 
   const { addToast } = useToast();
+  const { user } = useAuth();
   const navigate = useNavigate();
 
   // Automatic slide rotation
@@ -132,19 +135,25 @@ const Home: React.FC = () => {
     }
   };
 
-  // Add to Wishlist handler
+  // Add to Wishlist handler — guest: localStorage; auth: API
   const handleAddToWishlist = async (productId: string) => {
+    if (!user) {
+      const added = addToGuestWishlist(productId);
+      if (added) {
+        addToast('Item saved to your local wishlist! Sign in to sync across devices.', 'success');
+      } else {
+        addToast('Item is already in your wishlist.', 'info');
+      }
+      return;
+    }
     try {
       const res = await api.post(`/wishlist/${productId}`);
       if (res.data?.success) {
         addToast('Item added to your wishlist!', 'success');
       }
     } catch (err: any) {
-      const msg = err.response?.data?.error?.message || 'Please log in to update your wishlist.';
-      addToast(msg, err.response?.status === 401 ? 'warning' : 'error');
-      if (err.response?.status === 401) {
-        navigate(`/login?redirect=${encodeURIComponent(window.location.pathname)}`);
-      }
+      const msg = err.response?.data?.error?.message || 'Failed to update wishlist.';
+      addToast(msg, 'error');
     }
   };
 

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { ClipboardList, MapPin, Heart, User, Trash, Plus, ShieldCheck, Mail, Save, ExternalLink } from 'lucide-react';
+import { ClipboardList, MapPin, Heart, User, Trash, Plus, ShieldCheck, Mail, Save, ExternalLink, LogOut } from 'lucide-react';
 import StorefrontLayout from '../components/layout/StorefrontLayout.js';
 import Button from '../components/ui/Button.js';
 import Input from '../components/ui/Input.js';
@@ -33,8 +33,13 @@ interface UserAddress {
 
 const AccountDashboard: React.FC = () => {
   const navigate = useNavigate();
-  const { user, token, setUser } = useAuth();
+  const { user, isAuthenticated, setUser, logout } = useAuth();
   const { addToast } = useToast();
+
+  const handleLogout = async () => {
+    try { await logout(); } catch { /* swallowed */ }
+    navigate('/');
+  };
 
   const [activeTab, setActiveTab] = useState<TabType>('orders');
   const [orders, setOrders] = useState<OrderRow[]>([]);
@@ -59,11 +64,11 @@ const AccountDashboard: React.FC = () => {
 
   // Redirect if guest
   useEffect(() => {
-    if (!token) {
+    if (!isAuthenticated) {
       addToast('Please login to access your account dashboard.', 'warning');
       navigate('/login?redirect=/account');
     }
-  }, [token]);
+  }, [isAuthenticated]);
 
   // Sync profile details input
   useEffect(() => {
@@ -103,11 +108,11 @@ const AccountDashboard: React.FC = () => {
   };
 
   useEffect(() => {
-    if (token) {
+    if (isAuthenticated) {
       if (activeTab === 'orders') fetchOrders();
       if (activeTab === 'wishlist') fetchWishlist();
     }
-  }, [activeTab, token]);
+  }, [activeTab, isAuthenticated]);
 
   // Handle name update
   const handleUpdateProfile = async (e: React.FormEvent) => {
@@ -191,7 +196,7 @@ const AccountDashboard: React.FC = () => {
   // Remove wishlist item
   const handleRemoveWishlistItem = async (productId: string) => {
     try {
-      const res = await api.delete(`/wishlist/items/${productId}`);
+      const res = await api.delete(`/wishlist/${productId}`);
       if (res.data?.success) {
         setWishlistItems(wishlistItems.filter((item) => item._id !== productId));
         addToast('Wishlist item removed.', 'success');
@@ -278,6 +283,16 @@ const AccountDashboard: React.FC = () => {
             >
               <User className="h-4.5 w-4.5" /> Account Details
             </button>
+
+            {/* Logout — always visible at bottom of sidebar */}
+            <div className="mt-4 pt-4 border-t border-dashboard-section-bg/50">
+              <button
+                onClick={handleLogout}
+                className="w-full flex items-center gap-3 px-4 py-3 text-sm font-semibold rounded-btn text-danger hover:bg-red-50 transition-colors"
+              >
+                <LogOut className="h-4 w-4" /> Sign Out
+              </button>
+            </div>
           </div>
 
           {/* Right tab panel workspace */}

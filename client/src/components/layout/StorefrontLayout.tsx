@@ -1,7 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Search, User, Heart, ShoppingBag, X, Menu, ChevronDown, ChevronRight, Check } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import { Search, User, Heart, ShoppingBag, X, Menu, ChevronDown, ChevronRight, Check, LogOut, LayoutDashboard } from 'lucide-react';
 import Breadcrumb from '../ui/Breadcrumb.js';
 import type { BreadcrumbItem } from '../ui/Breadcrumb.js';
+import { useAuth } from '../../context/AuthContext.js';
 import api from '../../services/api.js';
 
 interface StorefrontLayoutProps {
@@ -52,6 +54,55 @@ const StorefrontLayout: React.FC<StorefrontLayoutProps> = ({ children, breadcrum
 
   // Mega Menu Hover State
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const navigate = useNavigate();
+
+  // Auth state
+  const { user, isAuthenticated, logout } = useAuth();
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+
+  const handleLogout = async () => {
+    setShowUserMenu(false);
+    try {
+      await logout();
+    } catch { /* swallow — logout clears state regardless */ }
+    navigate('/');
+  };
+
+  // Close user menu on outside click
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setShowUserMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  // Debounced mega-menu open/close — 180 ms close delay prevents accidental
+  // collapse when the mouse travels through the gap between trigger and panel.
+  const handleMenuEnter = useCallback((name: string) => {
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+    setActiveCategory(name);
+  }, []);
+
+  const handleMenuLeave = useCallback(() => {
+    closeTimerRef.current = setTimeout(() => {
+      setActiveCategory(null);
+    }, 180);
+  }, []);
+
+  // Clean up timer on unmount
+  useEffect(() => {
+    return () => {
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    };
+  }, []);
 
   // Mobile Drawer State
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -147,9 +198,9 @@ const StorefrontLayout: React.FC<StorefrontLayoutProps> = ({ children, breadcrum
             >
               <Menu className="h-6 w-6" />
             </button>
-            <a href="/" className="text-h2 font-bold tracking-tight text-primary-dark select-none flex items-center gap-1">
+            <Link to="/" className="text-h2 font-bold tracking-tight text-primary-dark select-none flex items-center gap-1">
               Opti<span className="text-primary">Cart</span>
-            </a>
+            </Link>
           </div>
 
           {/* Search Bar w/ Live Suggestions */}
@@ -183,8 +234,9 @@ const StorefrontLayout: React.FC<StorefrontLayoutProps> = ({ children, breadcrum
                 <ul className="divide-y divide-dashboard-section-bg max-h-80 overflow-y-auto">
                   {suggestions.map((product) => (
                     <li key={product.id}>
-                      <a
-                        href={`/products/${product.slug}`}
+                      <Link
+                        to={`/products/${product.slug}`}
+                        onClick={() => { setShowSuggestions(false); setSearchQuery(''); }}
                         className="flex items-center gap-4 p-3 hover:bg-dashboard-section-bg transition-colors"
                       >
                         {product.thumbnail ? (
@@ -208,7 +260,7 @@ const StorefrontLayout: React.FC<StorefrontLayoutProps> = ({ children, breadcrum
                             <span className="text-caption text-danger font-medium">Out of Stock</span>
                           )}
                         </div>
-                      </a>
+                      </Link>
                     </li>
                   ))}
                 </ul>
@@ -217,33 +269,95 @@ const StorefrontLayout: React.FC<StorefrontLayoutProps> = ({ children, breadcrum
           </div>
 
           {/* Action Icons */}
-          <div className="flex items-center gap-2 lg:gap-4 select-none">
-            <a
-              href="/account"
-              className="p-2 text-text-secondary hover:text-primary-dark hover:bg-dashboard-section-bg rounded-full transition-colors flex items-center"
-              aria-label="Account"
-            >
-              <User className="h-5.5 w-5.5" />
-            </a>
-            <a
-              href="/wishlist"
+          <div className="flex items-center gap-2 lg:gap-3 select-none">
+
+            {/* ── User / Account / Logout ────────────────────────────────── */}
+            {isAuthenticated && user ? (
+              <div className="relative" ref={userMenuRef}>
+                <button
+                  onClick={() => setShowUserMenu((v) => !v)}
+                  className="flex items-center gap-2 p-1.5 rounded-full hover:bg-dashboard-section-bg transition-colors focus:outline-none"
+                  aria-label="Account menu"
+                >
+                  {/* Initials avatar */}
+                  <span className="h-8 w-8 rounded-full bg-primary text-white flex items-center justify-center font-bold text-[11px] select-none shadow-level1">
+                    {user.name?.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2) || 'U'}
+                  </span>
+                  <ChevronDown className="h-3.5 w-3.5 text-text-muted hidden sm:block" />
+                </button>
+
+                {showUserMenu && (
+                  <div className="absolute right-0 mt-2 w-56 bg-surface border border-text-disabled rounded-dropdown shadow-level2 py-2 z-50">
+                    {/* Identity header */}
+                    <div className="px-4 py-2 border-b border-dashboard-section-bg">
+                      <p className="text-sm font-semibold text-text-primary truncate">{user.name}</p>
+                      <p className="text-[11px] text-text-muted truncate">{user.email}</p>
+                      <span className="inline-block mt-1 text-[9px] uppercase font-bold tracking-wider bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                        {user.role.replace('_', ' ')}
+                      </span>
+                    </div>
+
+                    <div className="mt-1 flex flex-col">
+                      {/* Account page (customers) */}
+                      {user.role === 'customer' && (
+                        <Link
+                          to="/account"
+                          onClick={() => setShowUserMenu(false)}
+                          className="flex items-center gap-2 px-4 py-2 text-sm text-text-secondary hover:bg-dashboard-section-bg transition-colors"
+                        >
+                          <User className="h-4 w-4 text-text-muted" /> My Account
+                        </Link>
+                      )}
+
+                      {/* Admin panel (manager / admin) */}
+                      {(user.role === 'inventory_manager' || user.role === 'super_admin') && (
+                        <Link
+                          to="/admin/dashboard"
+                          onClick={() => setShowUserMenu(false)}
+                          className="flex items-center gap-2 px-4 py-2 text-sm text-text-secondary hover:bg-dashboard-section-bg transition-colors"
+                        >
+                          <LayoutDashboard className="h-4 w-4 text-text-muted" /> Admin Panel
+                        </Link>
+                      )}
+
+                      {/* Logout — all roles */}
+                      <button
+                        onClick={handleLogout}
+                        className="w-full flex items-center gap-2 px-4 py-2 text-sm text-danger hover:bg-red-50 transition-colors"
+                      >
+                        <LogOut className="h-4 w-4" /> Sign Out
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Guest: plain icon → login */
+              <Link
+                to="/login"
+                className="p-2 text-text-secondary hover:text-primary-dark hover:bg-dashboard-section-bg rounded-full transition-colors flex items-center"
+                aria-label="Sign in"
+              >
+                <User className="h-5 w-5" />
+              </Link>
+            )}
+
+            <Link
+              to="/wishlist"
               className="p-2 text-text-secondary hover:text-danger hover:bg-dashboard-section-bg rounded-full transition-colors flex items-center relative"
               aria-label="Wishlist"
             >
-              <Heart className="h-5.5 w-5.5" />
-              <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-accent" />
-            </a>
-            <a
-              href="/cart"
+              <Heart className="h-5 w-5" />
+            </Link>
+            <Link
+              to="/cart"
               className="p-2 text-text-secondary hover:text-primary hover:bg-dashboard-section-bg rounded-full transition-colors flex items-center relative"
               aria-label="Cart"
             >
-              <ShoppingBag className="h-5.5 w-5.5" />
-              <span className="absolute top-0.5 right-0.5 bg-primary text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
-                3
-              </span>
-            </a>
+              <ShoppingBag className="h-5 w-5" />
+            </Link>
           </div>
+
         </div>
 
         {/* Row 2: Category Nav w/ Mega Menu (Desktop only) */}
@@ -251,21 +365,37 @@ const StorefrontLayout: React.FC<StorefrontLayoutProps> = ({ children, breadcrum
           <div className="max-w-7xl mx-auto px-4">
             <nav className="flex items-center gap-8 py-3 select-none">
               {CATEGORIES.map((category) => (
+                /*
+                 * HOVER-STABILITY FIX:
+                 * pt-3 extends the wrapper's hit-area downward to bridge the gap
+                 * between the trigger button and the absolutely-positioned panel,
+                 * so mouseleave doesn't fire while the cursor travels that gap.
+                 * The debounced handleMenuLeave adds a 180 ms safety window on top.
+                 */
                 <div
                   key={category.name}
-                  className="relative group"
-                  onMouseEnter={() => setActiveCategory(category.name)}
-                  onMouseLeave={() => setActiveCategory(null)}
+                  className="relative pt-3 -mt-3" // pt-3/-mt-3 bridge: extends bounding box without shifting layout
+                  onMouseEnter={() => handleMenuEnter(category.name)}
+                  onMouseLeave={handleMenuLeave}
                 >
-                  <button className="flex items-center gap-1.5 text-secondary text-sm font-semibold text-text-secondary hover:text-primary transition-colors py-1">
+                  <button
+                    className="flex items-center gap-1.5 text-secondary text-sm font-semibold text-text-secondary hover:text-primary transition-colors py-1"
+                    aria-haspopup="true"
+                    aria-expanded={activeCategory === category.name}
+                  >
                     <span>{category.name}</span>
-                    <ChevronDown className="h-4 w-4" />
+                    <ChevronDown
+                      className={`h-4 w-4 transition-transform duration-200 ${
+                        activeCategory === category.name ? 'rotate-180' : ''
+                      }`}
+                    />
                   </button>
 
-                  {/* Mega Menu Panel */}
+                  {/* Mega Menu Panel — top-full flush against the button, inside
+                      the wrapper's padded hit-area so no dead zone exists */}
                   {activeCategory === category.name && (
-                    <div className="absolute left-0 mt-3 w-[720px] bg-surface border border-text-disabled rounded-dropdown shadow-level3 z-50 p-6 flex gap-6 animate-scale-in">
-                      {/* Left: Category Info */}
+                    <div className="absolute left-0 top-full w-[720px] bg-surface border border-text-disabled rounded-dropdown shadow-level3 z-50 p-6 flex gap-6 animate-scale-in">
+                      {/* Left: Category description */}
                       <div className="w-1/3 border-r border-dashboard-section-bg pr-6">
                         <h4 className="text-sm font-bold text-primary-dark uppercase tracking-wider mb-2">
                           {category.name}
@@ -275,7 +405,7 @@ const StorefrontLayout: React.FC<StorefrontLayoutProps> = ({ children, breadcrum
                         </p>
                       </div>
 
-                      {/* Middle: Subcategories */}
+                      {/* Middle: Subcategories — button + navigate for SPA nav + menu close */}
                       <div className="w-1/3">
                         <h5 className="text-caption font-bold text-text-muted uppercase tracking-wider mb-3">
                           Subcategories
@@ -283,13 +413,16 @@ const StorefrontLayout: React.FC<StorefrontLayoutProps> = ({ children, breadcrum
                         <ul className="flex flex-col gap-2">
                           {category.subcategories.map((sub) => (
                             <li key={sub}>
-                              <a
-                                href={`/category/${sub.toLowerCase().replace(/ & /g, '-')}`}
-                                className="text-sm text-text-secondary hover:text-primary flex items-center justify-between group/item"
+                              <button
+                                onClick={() => {
+                                  setActiveCategory(null);
+                                  navigate(`/products?category=${encodeURIComponent(sub)}`);
+                                }}
+                                className="w-full text-left text-sm text-text-secondary hover:text-primary flex items-center justify-between group/item"
                               >
                                 <span>{sub}</span>
                                 <ChevronRight className="h-3.5 w-3.5 text-text-muted opacity-0 group-hover/item:opacity-100 transition-opacity" />
-                              </a>
+                              </button>
                             </li>
                           ))}
                         </ul>
@@ -302,17 +435,20 @@ const StorefrontLayout: React.FC<StorefrontLayoutProps> = ({ children, breadcrum
                         </h5>
                         <div className="flex flex-col gap-3">
                           {category.featured.map((feat) => (
-                            <a
+                            <button
                               key={feat.id}
-                              href={`/products/${feat.id}`}
-                              className="flex items-center gap-3 p-2 bg-surface rounded-image hover:shadow-level1 transition-shadow"
+                              onClick={() => {
+                                setActiveCategory(null);
+                                navigate(`/products/${feat.id}`);
+                              }}
+                              className="w-full text-left flex items-center gap-3 p-2 bg-surface rounded-image hover:shadow-level1 transition-shadow"
                             >
                               <span className="text-2xl">{feat.image}</span>
                               <div className="min-w-0">
                                 <p className="text-xs font-semibold text-text-primary truncate">{feat.name}</p>
                                 <span className="text-xs text-primary font-bold">{feat.price}</span>
                               </div>
-                            </a>
+                            </button>
                           ))}
                         </div>
                       </div>
@@ -330,9 +466,9 @@ const StorefrontLayout: React.FC<StorefrontLayoutProps> = ({ children, breadcrum
         <div className="fixed inset-0 z-50 flex lg:hidden bg-text-primary/40 backdrop-blur-sm">
           <div className="w-4/5 max-w-sm bg-surface h-full flex flex-col shadow-level3 animate-slide-in">
             <div className="p-4 border-b border-dashboard-section-bg flex items-center justify-between">
-              <a href="/" className="text-h2 font-bold text-primary-dark">
+              <Link to="/" className="text-h2 font-bold text-primary-dark">
                 Opti<span className="text-primary">Cart</span>
-              </a>
+              </Link>
               <button
                 onClick={() => setIsMobileMenuOpen(false)}
                 className="p-1 text-text-secondary hover:bg-dashboard-section-bg rounded-btn"
@@ -390,9 +526,63 @@ const StorefrontLayout: React.FC<StorefrontLayoutProps> = ({ children, breadcrum
                 </div>
               </div>
             </div>
+
+            {/* Mobile Auth Section — bottom of drawer */}
+            <div className="border-t border-dashboard-section-bg p-4">
+              {isAuthenticated && user ? (
+                <div className="flex flex-col gap-2">
+                  {/* Identity */}
+                  <div className="flex items-center gap-3 mb-2">
+                    <span className="h-9 w-9 rounded-full bg-primary text-white flex items-center justify-center font-bold text-sm flex-shrink-0">
+                      {user.name?.split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2) || 'U'}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-text-primary truncate">{user.name}</p>
+                      <span className="text-[9px] uppercase font-bold tracking-wider bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">
+                        {user.role.replace('_', ' ')}
+                      </span>
+                    </div>
+                  </div>
+
+                  {user.role === 'customer' && (
+                    <Link
+                      to="/account"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className="flex items-center gap-2 px-3 py-2 text-sm text-text-secondary hover:bg-dashboard-section-bg rounded-btn"
+                    >
+                      <User className="h-4 w-4 text-text-muted" /> My Account
+                    </Link>
+                  )}
+                  {(user.role === 'inventory_manager' || user.role === 'super_admin') && (
+                    <Link
+                      to="/admin/dashboard"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className="flex items-center gap-2 px-3 py-2 text-sm text-text-secondary hover:bg-dashboard-section-bg rounded-btn"
+                    >
+                      <LayoutDashboard className="h-4 w-4 text-text-muted" /> Admin Panel
+                    </Link>
+                  )}
+                  <button
+                    onClick={() => { setIsMobileMenuOpen(false); handleLogout(); }}
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-danger hover:bg-red-50 rounded-btn w-full text-left"
+                  >
+                    <LogOut className="h-4 w-4" /> Sign Out
+                  </button>
+                </div>
+              ) : (
+                <Link
+                  to="/login"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="flex items-center gap-2 px-3 py-2 text-sm font-semibold text-primary hover:bg-dashboard-section-bg rounded-btn"
+                >
+                  <User className="h-4 w-4" /> Sign In / Register
+                </Link>
+              )}
+            </div>
           </div>
         </div>
       )}
+
 
       {/* 4. Breadcrumbs */}
       {breadcrumbs && <Breadcrumb items={breadcrumbs} />}
@@ -414,28 +604,28 @@ const StorefrontLayout: React.FC<StorefrontLayoutProps> = ({ children, breadcrum
           <div>
             <h4 className="text-secondary font-semibold text-white mb-4">Categories</h4>
             <ul className="flex flex-col gap-2 text-caption text-text-muted">
-              <li><a href="/category/major-appliances" className="hover:text-white transition-colors">Major Appliances</a></li>
-              <li><a href="/category/small-appliances" className="hover:text-white transition-colors">Small Appliances</a></li>
-              <li><a href="/promotions" className="hover:text-white transition-colors">Special Offers</a></li>
-              <li><a href="/new-arrivals" className="hover:text-white transition-colors">New Releases</a></li>
+              <li><Link to="/products?category=major-appliances" className="hover:text-white transition-colors">Major Appliances</Link></li>
+              <li><Link to="/products?category=small-appliances" className="hover:text-white transition-colors">Small Appliances</Link></li>
+              <li><Link to="/products" className="hover:text-white transition-colors">Special Offers</Link></li>
+              <li><Link to="/products?sort=newest" className="hover:text-white transition-colors">New Releases</Link></li>
             </ul>
           </div>
           <div>
             <h4 className="text-secondary font-semibold text-white mb-4">Customer Care</h4>
             <ul className="flex flex-col gap-2 text-caption text-text-muted">
-              <li><a href="/support" className="hover:text-white transition-colors">Help Center</a></li>
-              <li><a href="/shipping" className="hover:text-white transition-colors">Shipping & Delivery</a></li>
-              <li><a href="/returns" className="hover:text-white transition-colors">Returns & Refunds</a></li>
-              <li><a href="/warranty" className="hover:text-white transition-colors">Warranty Policies</a></li>
+              <li><Link to="/" className="hover:text-white transition-colors">Help Center</Link></li>
+              <li><Link to="/" className="hover:text-white transition-colors">Shipping &amp; Delivery</Link></li>
+              <li><Link to="/" className="hover:text-white transition-colors">Returns &amp; Refunds</Link></li>
+              <li><Link to="/" className="hover:text-white transition-colors">Warranty Policies</Link></li>
             </ul>
           </div>
           <div>
             <h4 className="text-secondary font-semibold text-white mb-4">Corporate</h4>
             <ul className="flex flex-col gap-2 text-caption text-text-muted">
-              <li><a href="/about" className="hover:text-white transition-colors">About Us</a></li>
-              <li><a href="/careers" className="hover:text-white transition-colors">Careers</a></li>
-              <li><a href="/privacy" className="hover:text-white transition-colors">Privacy Policy</a></li>
-              <li><a href="/terms" className="hover:text-white transition-colors">Terms of Service</a></li>
+              <li><Link to="/" className="hover:text-white transition-colors">About Us</Link></li>
+              <li><Link to="/" className="hover:text-white transition-colors">Careers</Link></li>
+              <li><Link to="/" className="hover:text-white transition-colors">Privacy Policy</Link></li>
+              <li><Link to="/" className="hover:text-white transition-colors">Terms of Service</Link></li>
             </ul>
           </div>
         </div>

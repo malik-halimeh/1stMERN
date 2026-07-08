@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { ChevronRight, Home } from 'lucide-react';
 
 export interface BreadcrumbItem {
@@ -15,13 +16,13 @@ const Breadcrumb: React.FC<BreadcrumbProps> = ({ items }) => {
     <nav aria-label="Breadcrumb" className="w-full py-2 px-4 bg-background border-b border-dashboard-section-bg font-sans select-none">
       <ol className="flex items-center gap-2 text-secondary text-sm">
         <li className="flex items-center">
-          <a
-            href="/"
+          <Link
+            to="/"
             className="text-text-muted hover:text-text-secondary flex items-center transition-colors focus-visible:ring-2 focus-visible:ring-primary rounded"
           >
             <Home className="h-4 w-4" />
             <span className="sr-only">Home</span>
-          </a>
+          </Link>
         </li>
 
         {items.map((item, index) => {
@@ -35,12 +36,12 @@ const Breadcrumb: React.FC<BreadcrumbProps> = ({ items }) => {
                   {item.label}
                 </span>
               ) : (
-                <a
-                  href={item.href}
+                <Link
+                  to={item.href}
                   className="text-text-muted hover:text-text-secondary transition-colors focus-visible:ring-2 focus-visible:ring-primary rounded"
                 >
                   {item.label}
-                </a>
+                </Link>
               )}
             </li>
           );

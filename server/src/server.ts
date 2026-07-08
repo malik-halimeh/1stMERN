@@ -7,6 +7,8 @@ import dotenv from 'dotenv';
 import { notFound, errorHandler } from './middleware/error.js';
 import { apiRateLimiter } from './middleware/rateLimiter.js';
 import apiRouter from './routes/index.js';
+import connectDB from './config/db.js';
+import { startScheduledJobs } from './services/scheduler.js';
 
 // Load environment variables
 dotenv.config();
@@ -40,8 +42,12 @@ app.get('/api/health', (req, res) => {
 app.use(notFound);
 app.use(errorHandler);
 
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+// Connect to MongoDB then start the server
+connectDB().then(() => {
+  app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+    startScheduledJobs();
+  });
 });
 
 export default app;

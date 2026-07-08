@@ -147,7 +147,34 @@ export const getProductBySlug = async (req: Request, res: Response, next: NextFu
   }
 };
 
-// 3. POST /api/products - Manager Only (Multipart Cloudinary Upload)
+// 3. GET /api/products/by-ids?ids=id1,id2 — Public batch fetch (used by guest wishlist)
+export const getProductsByIds = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const idsParam = req.query.ids as string;
+    if (!idsParam || !idsParam.trim()) {
+      return res.status(200).json({ success: true, data: [] });
+    }
+
+    const rawIds = idsParam.split(',').map((s) => s.trim()).filter(Boolean);
+
+    // Filter to only valid ObjectIds to avoid DB errors
+    const validIds = rawIds.filter((id) => mongoose.Types.ObjectId.isValid(id));
+
+    if (validIds.length === 0) {
+      return res.status(200).json({ success: true, data: [] });
+    }
+
+    const products = await Product.find({ _id: { $in: validIds } }).select(
+      'name slug brand basePriceCents variants images ratingAvg reviewCount thumbnail isTrending isMostSelling'
+    );
+
+    res.status(200).json({ success: true, data: products });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// 4. POST /api/products - Manager Only (Multipart Cloudinary Upload)
 export const createProduct = async (req: Request, res: Response, next: NextFunction) => {
   try {
     // Form data fields might contain stringified JSON arrays

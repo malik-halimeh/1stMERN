@@ -5,6 +5,8 @@ import { useToast } from '../context/ToastContext.js';
 import Input from '../components/ui/Input.js';
 import Button from '../components/ui/Button.js';
 import { Lock, Mail } from 'lucide-react';
+import { getGuestWishlist, clearGuestWishlist } from './Wishlist.js';
+import api from '../services/api.js';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -44,6 +46,19 @@ const Login: React.FC = () => {
           console.error('Guest cart merge failed:', mergeErr);
         } finally {
           localStorage.removeItem('guest_cart');
+        }
+      }
+
+      // Wishlist merge-on-login logic
+      const guestWishlist = getGuestWishlist();
+      if (guestWishlist && guestWishlist.length > 0) {
+        try {
+          await api.post('/wishlist/merge', { productIds: guestWishlist });
+          addToast('Synchronized guest wishlist with your account.', 'success');
+        } catch (mergeErr) {
+          console.error('Guest wishlist merge failed:', mergeErr);
+        } finally {
+          clearGuestWishlist();
         }
       }
 

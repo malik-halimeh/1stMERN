@@ -172,7 +172,7 @@ const MockPaymentForm: React.FC<{ paymentIntentId: string; totalCents: number; o
 
 const Checkout: React.FC = () => {
   const navigate = useNavigate();
-  const { user, token, setUser } = useAuth();
+  const { user, isAuthenticated, setUser } = useAuth();
   const { addToast } = useToast();
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
@@ -196,11 +196,11 @@ const Checkout: React.FC = () => {
 
   // Redirect if guest/unauthenticated
   useEffect(() => {
-    if (!token) {
+    if (!isAuthenticated) {
       addToast('Please login to finalize your checkout.', 'warning');
       navigate('/login?redirect=/checkout');
     }
-  }, [token]);
+  }, [isAuthenticated]);
 
   // Default address index selector
   useEffect(() => {
