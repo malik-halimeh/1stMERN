@@ -243,7 +243,7 @@ export function DataTable<T extends Record<string, any>>({
                   <tr
                     key={row[keyField as string] || rIdx}
                     className={`transition-colors hover:bg-dashboard-section-bg/30 ${
-                      isSelected ? 'bg-blue-50/20' : 'even:bg-background/20'
+                      isSelected ? 'bg-primary/5' : 'even:bg-background/20'
                     }`}
                   >
                     {onSelectionChange && (

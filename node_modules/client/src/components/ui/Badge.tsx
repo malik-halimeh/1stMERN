@@ -13,7 +13,7 @@ const Badge: React.FC<BadgeProps> = ({
   ...props
 }) => {
   const configs = {
-    primary: 'bg-blue-50 text-primary border border-blue-200',
+    primary: 'bg-primary/10 text-primary border border-primary/25',
     success: 'bg-green-50 text-success border border-green-200',
     warning: 'bg-amber-50 text-warning border border-amber-200',
     danger: 'bg-red-50 text-danger border border-red-200',

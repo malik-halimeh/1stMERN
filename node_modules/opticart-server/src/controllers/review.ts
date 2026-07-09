@@ -322,3 +322,34 @@ export const deleteReview = async (req: Request, res: Response, next: NextFuncti
     session.endSession();
   }
 };
+
+// GET /api/reviews - Full review list for staff moderation (paginated)
+export const getAllReviews = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 50));
+    const skip = (page - 1) * limit;
+
+    const filter = { isRemoved: false };
+    const total = await Review.countDocuments(filter);
+    const reviews = await Review.find(filter)
+      .populate('productId', 'name slug')
+      .populate('userId', 'name email')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    res.status(200).json({
+      success: true,
+      data: reviews,
+      meta: {
+        total,
+        page,
+        limit,
+        pages: Math.ceil(total / limit) || 1,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};

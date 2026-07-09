@@ -7,22 +7,31 @@ export default {
   theme: {
     extend: {
       colors: {
-        primary: '#2563EB',
-        'primary-dark': '#1E3A8A',
-        secondary: '#1E3A8A',
-        accent: '#F97316',
-        background: '#F8FAFC',
+        primary: '#EA580C',
+        'primary-dark': '#9A3412',
+        // Pressed/active state one step darker than primary-dark hover
+        'primary-active': '#7C2D12',
+        secondary: '#9A3412',
+        accent: '#0D9488',
+        background: '#FAFAF9',
         surface: '#FFFFFF',
         card: '#FFFFFF',
-        'dashboard-section-bg': '#F1F5F9',
-        'text-primary': '#111827',
-        'text-secondary': '#4B5563',
-        'text-muted': '#9CA3AF',
-        'text-disabled': '#D1D5DB',
+        'dashboard-section-bg': '#F5F5F4',
+        'text-primary': '#1C1917',
+        'text-secondary': '#57534E',
+        'text-muted': '#A8A29E',
+        'text-disabled': '#D6D3D1',
         success: '#16A34A',
-        warning: '#F59E0B',
+        warning: '#CA8A04',
         danger: '#DC2626',
-        info: '#0EA5E9',
+        info: '#0284C7',
+        // Tint-base tokens: components already use bg-*-bg/NN opacity classes,
+        // but these tokens were never defined, so those backgrounds silently
+        // rendered transparent. Defined as the full-strength semantic colors
+        // so the existing opacity modifiers produce the intended tints.
+        'primary-bg': '#EA580C',
+        'success-bg': '#16A34A',
+        'danger-bg': '#DC2626',
       },
       fontFamily: {
         sans: ['Inter', 'sans-serif'],

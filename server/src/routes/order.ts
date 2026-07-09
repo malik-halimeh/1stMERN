@@ -17,7 +17,8 @@ router.post('/webhook', stripeWebhook);
 // Customer-scoped order routes
 router.use(authenticate);
 
-router.get('/', authorize('customer'), getOrders);
+// Customers see their own orders; managers and super admins see all orders
+router.get('/', authorize('customer', 'inventory_manager', 'super_admin'), getOrders);
 router.post('/checkout-session', authorize('customer'), createCheckoutSession);
 router.get('/status/:paymentIntentId', authorize('customer'), getOrderStatus);
 router.get('/:id', authorize('customer', 'inventory_manager', 'super_admin'), getOrderDetails);

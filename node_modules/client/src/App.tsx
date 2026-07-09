@@ -21,6 +21,17 @@ import OrderConfirmation from './pages/OrderConfirmation.js';
 import AccountDashboard from './pages/AccountDashboard.js';
 import OrderDetail from './pages/OrderDetail.js';
 import Wishlist from './pages/Wishlist.js';
+import Users from './pages/admin/users.js';
+import AdminOrders from './pages/admin/Orders.js';
+import AdminProducts from './pages/admin/Products.js';
+import AdminLowStock from './pages/admin/LowStock.js';
+import AdminCoupons from './pages/admin/Coupons.js';
+import AdminReviews from './pages/admin/Reviews.js';
+import AdminAuditLogs from './pages/admin/AuditLogs.js';
+import AdminDashboard from './pages/admin/Dashboard.js';
+import AdminAnalytics from './pages/admin/Analytics.js';
+import Categories from './pages/Inventory/Categories.js';
+import { AdminPanel } from './pages/admin/AdminPanel.js';
 
 // --------------------------------------------------------------------------
 // Route Guards
@@ -80,6 +91,16 @@ const AdminPage: React.FC<{ title: string; description?: string }> = ({ title, d
 const AdminRoute: React.FC<{ title: string; description?: string }> = (props) => (
   <ProtectedRoute requiredRoles={['inventory_manager', 'super_admin']}>
     <AdminPage {...props} />
+  </ProtectedRoute>
+);
+
+/** Role-guarded admin layout wrapper for pages with real content */
+const AdminContentRoute: React.FC<{
+  children: React.ReactNode;
+  requiredRoles?: Array<'customer' | 'inventory_manager' | 'super_admin'>;
+}> = ({ children, requiredRoles = ['inventory_manager', 'super_admin'] }) => (
+  <ProtectedRoute requiredRoles={requiredRoles}>
+    <AdminPanel>{children}</AdminPanel>
   </ProtectedRoute>
 );
 
@@ -145,82 +166,83 @@ function App() {
         <Route
           path="/admin/dashboard"
           element={
-            <AdminRoute
-              title="Admin Dashboard"
-              description="Overview of orders, inventory, and platform activity."
-            />
+            <AdminContentRoute>
+              <AdminDashboard />
+            </AdminContentRoute>
           }
         />
         <Route
           path="/admin/products"
           element={
-            <AdminRoute
-              title="Products"
-              description="Manage your appliance catalog — add, edit, and remove products."
-            />
+            <AdminContentRoute>
+              <AdminProducts />
+            </AdminContentRoute>
           }
         />
         <Route
           path="/admin/orders"
           element={
-            <AdminRoute
-              title="Orders"
-              description="View and advance order statuses across all customers."
-            />
+            <AdminContentRoute>
+              <AdminOrders />
+            </AdminContentRoute>
           }
         />
         <Route
           path="/admin/low-stock"
           element={
-            <AdminRoute
-              title="Low Stock Alerts"
-              description="Monitor variants that have fallen below their stock threshold."
-            />
+            <AdminContentRoute>
+              <AdminLowStock />
+            </AdminContentRoute>
           }
         />
         <Route
           path="/admin/coupons"
           element={
-            <AdminRoute
-              title="Coupons"
-              description="Create, edit, and deactivate discount coupon codes."
-            />
+            <AdminContentRoute>
+              <AdminCoupons />
+            </AdminContentRoute>
           }
         />
         <Route
           path="/admin/reviews"
           element={
-            <AdminRoute
-              title="Reviews"
-              description="Moderate customer product reviews."
-            />
+            <AdminContentRoute>
+              <AdminReviews />
+            </AdminContentRoute>
           }
         />
         <Route
           path="/admin/users"
           element={
-            <AdminRoute
-              title="Users"
-              description="Manage platform accounts and role assignments."
-            />
+            <ProtectedRoute requiredRoles={['super_admin']}>
+              <AdminPanel>
+                <Users />
+              </AdminPanel>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/admin/categories"
+          element={
+            <AdminContentRoute>
+              <Categories />
+            </AdminContentRoute>
           }
         />
         <Route
           path="/admin/audit-logs"
           element={
-            <AdminRoute
-              title="Audit Logs"
-              description="Immutable record of all privileged administrative actions."
-            />
+            <AdminContentRoute requiredRoles={['super_admin']}>
+              <AdminAuditLogs />
+            </AdminContentRoute>
           }
         />
         <Route
           path="/admin/analytics"
           element={
-            <AdminRoute
-              title="Analytics"
-              description="Revenue trends, top products, and customer activity reports."
-            />
+            <AdminContentRoute requiredRoles={['super_admin']}>
+              <AdminAnalytics />
+            </AdminContentRoute>
           }
         />
         <Route

@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import mongoose from 'mongoose';
 import User from '../models/User.js';
 import { generateAccessToken, generateRefreshToken, hashString } from '../utils/tokens.js';
 import { AppError } from '../utils/errors.js';
@@ -59,6 +60,8 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
 
     // Hash and store opaque refresh token in DB
     user.refreshTokenHash = hashString(refreshToken);
+    user.prevRefreshTokenHash = null;
+    user.prevRefreshTokenExpiresAt = null;
     await user.save();
 
     // Set HTTP-Only refresh cookie (format: userId:opaqueRefreshToken)
@@ -117,6 +120,8 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
 
     // Hash and save refresh token
     user.refreshTokenHash = hashString(refreshToken);
+    user.prevRefreshTokenHash = null;
+    user.prevRefreshTokenExpiresAt = null;
     await user.save();
 
     // Set cookie
@@ -139,6 +144,11 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
   }
 };
 
+// Rotation grace window: after a rotation, the replaced refresh token is still
+// accepted (for a new ACCESS token only, no re-rotation) for this long, so
+// near-simultaneous refreshes from multiple tabs don't trip reuse detection.
+const ROTATION_GRACE_MS = 30 * 1000;
+
 // 3. POST /api/auth/refresh
 export const refresh = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -155,41 +165,71 @@ export const refresh = async (req: Request, res: Response, next: NextFunction) =
     const userId = refreshCookie.substring(0, separatorIndex);
     const tokenPart = refreshCookie.substring(separatorIndex + 1);
 
+    if (!mongoose.Types.ObjectId.isValid(userId)) {
+      throw new AppError('AUTH_INVALID_REFRESH_TOKEN', 'Session refresh token is malformed.', 401);
+    }
+
+    const incomingHash = hashString(tokenPart);
+
+    const newRefreshToken = generateRefreshToken();
+
+    // Happy path — atomic rotation: the hash match is part of the query, so
+    // of N concurrent refreshes carrying the same token exactly one rotates.
+    const rotated = await User.findOneAndUpdate(
+      { _id: userId, refreshTokenHash: incomingHash },
+      {
+        refreshTokenHash: hashString(newRefreshToken),
+        prevRefreshTokenHash: incomingHash,
+        prevRefreshTokenExpiresAt: new Date(Date.now() + ROTATION_GRACE_MS),
+      },
+      { new: true }
+    );
+
+    if (rotated) {
+      res.cookie('refreshToken', `${rotated._id}:${newRefreshToken}`, getCookieOptions());
+      res.status(200).json({
+        success: true,
+        data: {
+          accessToken: generateAccessToken(rotated._id.toString(), rotated.role),
+        },
+      });
+      return;
+    }
+
     const user = await User.findById(userId);
     if (!user) {
       throw new AppError('AUTH_USER_NOT_FOUND', 'Associated session user not found.', 401);
     }
 
-    const incomingHash = hashString(tokenPart);
-
-    // Compromise detection: check if stored hash matches incoming hash
-    if (user.refreshTokenHash !== incomingHash) {
-      // Stale or duplicate reuse detected. Revoke all refresh access to force full re-login
-      user.refreshTokenHash = null;
-      await user.save();
-      res.clearCookie('refreshToken', getCookieOptions());
-      throw new AppError(
-        'AUTH_SESSION_COMPROMISED',
-        'Session compromised. Token reuse detected. Please log in again.',
-        403
-      );
+    // Grace path: this token was just rotated away by a concurrent request
+    // (another tab). Issue a fresh access token but do NOT rotate again — the
+    // shared cookie jar already holds the newest refresh token.
+    if (
+      user.prevRefreshTokenHash === incomingHash &&
+      user.prevRefreshTokenExpiresAt &&
+      user.prevRefreshTokenExpiresAt.getTime() > Date.now()
+    ) {
+      res.status(200).json({
+        success: true,
+        data: {
+          accessToken: generateAccessToken(user._id.toString(), user.role),
+        },
+      });
+      return;
     }
 
-    // Happy Path: Rotate tokens
-    const newAccessToken = generateAccessToken(user._id.toString(), user.role);
-    const newRefreshToken = generateRefreshToken();
-
-    user.refreshTokenHash = hashString(newRefreshToken);
+    // Stale or duplicate reuse outside the grace window. Revoke all refresh
+    // access to force full re-login
+    user.refreshTokenHash = null;
+    user.prevRefreshTokenHash = null;
+    user.prevRefreshTokenExpiresAt = null;
     await user.save();
-
-    res.cookie('refreshToken', `${user._id}:${newRefreshToken}`, getCookieOptions());
-
-    res.status(200).json({
-      success: true,
-      data: {
-        accessToken: newAccessToken,
-      },
-    });
+    res.clearCookie('refreshToken', getCookieOptions());
+    throw new AppError(
+      'AUTH_SESSION_COMPROMISED',
+      'Session compromised. Token reuse detected. Please log in again.',
+      403
+    );
   } catch (error) {
     next(error);
   }
@@ -204,10 +244,14 @@ export const logout = async (req: Request, res: Response, next: NextFunction) =>
       const separatorIndex = refreshCookie.indexOf(':');
       if (separatorIndex !== -1) {
         const userId = refreshCookie.substring(0, separatorIndex);
-        const user = await User.findById(userId);
+        const user = mongoose.Types.ObjectId.isValid(userId)
+          ? await User.findById(userId)
+          : null;
         if (user) {
           // Clear DB record hash
           user.refreshTokenHash = null;
+          user.prevRefreshTokenHash = null;
+          user.prevRefreshTokenExpiresAt = null;
           await user.save();
         }
       }

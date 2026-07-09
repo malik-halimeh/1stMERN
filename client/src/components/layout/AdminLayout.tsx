@@ -5,12 +5,14 @@ import {
   Package,
   ShoppingBag,
   AlertTriangle,
+  FolderTree,
   Ticket,
   Star,
   Users,
   FileText,
   BarChart3,
   LogOut,
+  Store,
   ChevronLeft,
   ChevronRight,
   Search,
@@ -36,7 +38,7 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   {
-    label: 'Dashboard-lite',
+    label: 'Dashboard',
     href: '/admin/dashboard',
     icon: <LayoutDashboard className="h-5 w-5" />,
     roles: ['inventory_manager', 'super_admin'],
@@ -45,6 +47,12 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Products',
     href: '/admin/products',
     icon: <Package className="h-5 w-5" />,
+    roles: ['inventory_manager', 'super_admin'],
+  },
+  {
+    label: 'Categories',
+    href: '/admin/categories',
+    icon: <FolderTree className="h-5 w-5" />,
     roles: ['inventory_manager', 'super_admin'],
   },
   {
@@ -161,11 +169,10 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({
               <Link
                 key={item.label}
                 to={item.href}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-btn text-secondary font-medium transition-all group ${
-                  isActive
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-btn text-secondary font-medium transition-all group ${isActive
                     ? 'bg-primary text-white'
                     : 'text-text-muted hover:bg-white/5 hover:text-white'
-                }`}
+                  }`}
                 title={isCollapsed ? item.label : undefined}
               >
                 <span className={`flex-shrink-0 ${isActive ? 'text-white' : 'text-text-muted group-hover:text-white'}`}>
@@ -178,8 +185,16 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({
         </nav>
       </div>
 
-      {/* Logout Row */}
+      {/* View Store + Logout Rows */}
       <div className="p-2 border-t border-white/10 select-none">
+        <Link
+          to="/"
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-btn text-secondary font-medium text-text-muted hover:bg-white/5 hover:text-white transition-colors group"
+          title={isCollapsed ? 'View Store' : undefined}
+        >
+          <Store className="h-5 w-5 text-text-muted group-hover:text-white flex-shrink-0" />
+          {!isCollapsed && <span>View Store</span>}
+        </Link>
         <button
           onClick={handleLogout}
           className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-btn text-secondary font-medium text-text-muted hover:bg-red-950/40 hover:text-red-300 transition-colors group`}
@@ -196,9 +211,8 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({
     <div className="min-h-screen flex bg-background text-text-primary font-sans">
       {/* 1. Desktop Sidebar */}
       <aside
-        className={`hidden lg:block fixed inset-y-0 left-0 z-30 transition-all duration-300 border-r border-white/10 bg-primary-dark ${
-          isCollapsed ? 'w-16' : 'w-64'
-        }`}
+        className={`hidden lg:block fixed inset-y-0 left-0 z-30 transition-all duration-300 border-r border-white/10 bg-primary-dark ${isCollapsed ? 'w-16' : 'w-64'
+          }`}
       >
         <SidebarContent />
       </aside>
@@ -216,9 +230,8 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({
 
       {/* Main Body (Offset by Sidebar Width on Desktop) */}
       <div
-        className={`flex-grow flex flex-col min-h-screen transition-all duration-300 ${
-          isCollapsed ? 'lg:pl-16' : 'lg:pl-64'
-        }`}
+        className={`flex-grow flex flex-col min-h-screen transition-all duration-300 ${isCollapsed ? 'lg:pl-16' : 'lg:pl-64'
+          }`}
       >
         {/* Sticky Top Bar */}
         <header className="sticky top-0 z-20 bg-surface border-b border-dashboard-section-bg shadow-level1 h-16 flex items-center justify-between px-6">

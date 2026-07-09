@@ -8,8 +8,8 @@ const router = Router();
 // Apply Coupon endpoint (customer-scoped, rate-limited to 20 requests per 15 mins)
 router.post('/apply', authenticate, authorize('customer'), couponApplyRateLimiter as any, applyCoupon);
 
-// Manager CUD endpoints
-router.get('/', authenticate, authorize('inventory_manager'), getCoupons);
+// Manager CUD endpoints (super admins get read visibility)
+router.get('/', authenticate, authorize('inventory_manager', 'super_admin'), getCoupons);
 router.post('/', authenticate, authorize('inventory_manager'), createCoupon);
 router.patch('/:id', authenticate, authorize('inventory_manager'), updateCoupon);
 router.delete('/:id', authenticate, authorize('inventory_manager'), deleteCoupon);

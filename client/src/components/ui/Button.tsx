@@ -27,8 +27,8 @@ const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       'inline-flex items-center justify-center font-sans font-medium text-secondary rounded-btn transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:cursor-not-allowed disabled:pointer-events-none px-4 py-2 relative';
 
     const variants = {
-      primary: 'bg-primary text-white hover:bg-primary-dark active:bg-blue-800 disabled:bg-text-disabled disabled:text-text-muted',
-      secondary: 'bg-white border border-primary text-primary hover:bg-blue-50 active:bg-blue-100 disabled:border-text-disabled disabled:text-text-disabled',
+      primary: 'bg-primary text-white hover:bg-primary-dark active:bg-primary-active disabled:bg-text-disabled disabled:text-text-muted',
+      secondary: 'bg-white border border-primary text-primary hover:bg-primary/5 active:bg-primary/10 disabled:border-text-disabled disabled:text-text-disabled',
       ghost: 'bg-transparent text-text-secondary hover:bg-dashboard-section-bg hover:text-text-primary active:bg-text-disabled/20 disabled:text-text-disabled',
       success: 'bg-success text-white hover:bg-green-700 active:bg-green-800 disabled:bg-text-disabled disabled:text-text-muted',
       danger: 'bg-danger text-white hover:bg-red-700 active:bg-red-800 disabled:bg-text-disabled disabled:text-text-muted',

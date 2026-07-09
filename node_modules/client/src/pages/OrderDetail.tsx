@@ -146,7 +146,7 @@ const OrderDetail: React.FC = () => {
                   </span>
                 )}
                 {order.status === 'refunded' && (
-                  <span className="bg-orange-100 border border-orange-200 text-orange-800 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider">
+                  <span className="bg-amber-100 border border-amber-200 text-amber-700 px-3 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider">
                     Refunded
                   </span>
                 )}

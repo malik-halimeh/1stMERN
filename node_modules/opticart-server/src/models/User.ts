@@ -15,6 +15,8 @@ export interface IUser extends Document {
   passwordHash: string;
   role: 'customer' | 'inventory_manager' | 'super_admin';
   refreshTokenHash?: string | null;
+  prevRefreshTokenHash?: string | null;
+  prevRefreshTokenExpiresAt?: Date | null;
   addresses: IAddress[];
   isActive: boolean;
   createdAt: Date;
@@ -49,6 +51,10 @@ const UserSchema = new Schema<IUser>(
       required: true,
     },
     refreshTokenHash: { type: String, default: null },
+    // Rotation grace: the previous refresh token stays valid for a short
+    // window so concurrent refreshes (multiple tabs) don't trip reuse detection
+    prevRefreshTokenHash: { type: String, default: null },
+    prevRefreshTokenExpiresAt: { type: Date, default: null },
     addresses: [AddressSchema],
     isActive: { type: Boolean, default: true, required: true },
   },

@@ -317,13 +317,24 @@ export const getOrders = async (req: Request, res: Response, next: NextFunction)
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 20));
     const skip = (page - 1) * limit;
 
-    const filter = { userId: new mongoose.Types.ObjectId(req.user.userId) };
+    // Staff (fulfillment queue) see all orders, optionally filtered by status;
+    // customers only ever see their own
+    const isStaff = req.user.role === 'inventory_manager' || req.user.role === 'super_admin';
+    const filter: Record<string, unknown> = isStaff
+      ? {}
+      : { userId: new mongoose.Types.ObjectId(req.user.userId) };
+
+    const statusFilter = req.query.status as string | undefined;
+    if (isStaff && statusFilter) {
+      filter.status = statusFilter;
+    }
 
     const total = await Order.countDocuments(filter);
-    const orders = await Order.find(filter)
-      .skip(skip)
-      .limit(limit)
-      .sort({ createdAt: -1 });
+    let query = Order.find(filter).skip(skip).limit(limit).sort({ createdAt: -1 });
+    if (isStaff) {
+      query = query.populate('userId', 'name email');
+    }
+    const orders = await query;
 
     res.status(200).json({
       success: true,

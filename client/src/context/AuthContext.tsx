@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import api, { setAccessToken } from '../services/api.js';
+import api, { setAccessToken, refreshAccessToken } from '../services/api.js';
 
 export interface IUser {
   id: string;
@@ -45,10 +45,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // 1. Silent Refresh on App Mount
   const silentRefresh = useCallback(async () => {
     try {
-      const response = await api.post('/auth/refresh');
-      const token = response.data?.data?.accessToken;
+      // Single-flight: shares any in-flight refresh (e.g. StrictMode's
+      // double-mount or an interceptor-triggered refresh) instead of firing
+      // a second rotation that the server would flag as token reuse.
+      const token = await refreshAccessToken();
       if (token) {
-        setAccessToken(token);
         const decoded = decodeJwt(token);
         if (decoded) {
           try {

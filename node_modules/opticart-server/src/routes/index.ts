@@ -12,6 +12,8 @@ import recommendationRouter from './recommendation.js';
 import orderRouter from './order.js';
 import productEventsRouter from './productEvents.js';
 import { authenticate, authorize } from '../middleware/auth.js';
+import userRouter from './user.js'
+import analyticsRouter from './analytics.js'
 
 const router = Router();
 
@@ -55,6 +57,12 @@ router.use('/orders', orderRouter);
 
 // 12. Product events (batched analytics writes — public, no auth required)
 router.use('/product-events', productEventsRouter);
+
+// 13. users
+router.use('/users', userRouter)
+
+// 14. analytics (super admin)
+router.use('/analytics', analyticsRouter)
 
 
 // Protected Stub Route to test access + RBAC (only accessible to Super Admins)

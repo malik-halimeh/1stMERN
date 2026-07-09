@@ -4,10 +4,10 @@ import { authenticate, authorize } from '../middleware/auth.js';
 
 const router = Router();
 
-// Low stock routing is inventory-manager scoped
-router.use(authenticate, authorize('inventory_manager'));
+router.use(authenticate);
 
-router.get('/', getLowStockAlerts);
-router.patch('/:id/resolve', resolveLowStockAlert);
+// Super admins get read visibility; resolving stays manager-scoped
+router.get('/', authorize('inventory_manager', 'super_admin'), getLowStockAlerts);
+router.patch('/:id/resolve', authorize('inventory_manager'), resolveLowStockAlert);
 
 export default router;

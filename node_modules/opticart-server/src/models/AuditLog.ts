@@ -5,6 +5,7 @@ export type AuditActionType =
   | 'order_status_change'
   | 'refund_decision'
   | 'role_change'
+  | 'account_status_change'
   | 'coupon_cud'
   | 'review_removal';
 
@@ -40,6 +41,7 @@ const AuditLogSchema = new Schema<IAuditLog>(
         'order_status_change',
         'refund_decision',
         'role_change',
+        'account_status_change',
         'coupon_cud',
         'review_removal',
       ],
