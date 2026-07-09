@@ -152,7 +152,7 @@ export const createReview = async (req: Request, res: Response, next: NextFuncti
     } catch (txErr: any) {
       await session.abortTransaction();
       // Standalone MongoDB server compatibility fallback:
-      if (txErr.message.includes('transaction') || txErr.codeName === 'CommandNotSupportedOnReplicaSetMemberWithoutReplication') {
+      if (/transaction/i.test(txErr.message) || txErr.codeName === 'CommandNotSupportedOnReplicaSetMemberWithoutReplication') {
         console.warn('Transactions are disabled by DB host. Executing queries sequentially...');
         
         // Retry standard sequential execution
@@ -235,7 +235,7 @@ export const updateReview = async (req: Request, res: Response, next: NextFuncti
       await session.commitTransaction();
     } catch (txErr: any) {
       await session.abortTransaction();
-      if (txErr.message.includes('transaction') || txErr.codeName === 'CommandNotSupportedOnReplicaSetMemberWithoutReplication') {
+      if (/transaction/i.test(txErr.message) || txErr.codeName === 'CommandNotSupportedOnReplicaSetMemberWithoutReplication') {
         console.warn('Transactions disabled. Executing standard queries...');
         await review.save();
         await recalculateProductRatings(review.productId);
@@ -287,7 +287,7 @@ export const deleteReview = async (req: Request, res: Response, next: NextFuncti
       await session.commitTransaction();
     } catch (txErr: any) {
       await session.abortTransaction();
-      if (txErr.message.includes('transaction') || txErr.codeName === 'CommandNotSupportedOnReplicaSetMemberWithoutReplication') {
+      if (/transaction/i.test(txErr.message) || txErr.codeName === 'CommandNotSupportedOnReplicaSetMemberWithoutReplication') {
         console.warn('Transactions disabled. Running sequential soft deletes...');
         await review.save();
         await recalculateProductRatings(review.productId);
