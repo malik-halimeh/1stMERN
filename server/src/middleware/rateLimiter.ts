@@ -46,7 +46,7 @@ export const couponApplyRateLimiter = rateLimit({
 // General API Limiter: 100 requests per 15 minutes per IP
 export const apiRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 10000,
   standardHeaders: true,
   legacyHeaders: false,
   handler: (req, res, next) => {
