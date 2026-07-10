@@ -105,19 +105,47 @@ export const createCheckoutSession = async (req: Request, res: Response, next: N
       });
     }
 
-    // Apply coupon if sent
+    // Apply coupon if sent — re-validate ALL the rules /coupons/apply enforces
+    // (a couponCode sent straight to checkout must not bypass usage caps).
     let discountCents = 0;
     if (couponCode) {
       const normalizedCode = couponCode.toUpperCase().trim();
       const coupon = await Coupon.findOne({ code: normalizedCode });
-      if (coupon && coupon.isActive && new Date(coupon.expiryDate) > new Date() && subtotalCents >= coupon.minOrderValueCents) {
-        if (coupon.type === 'percentage') {
-          discountCents = Math.round(subtotalCents * (coupon.value / 100));
-        } else if (coupon.type === 'fixed') {
-          discountCents = coupon.value;
-        }
-        discountCents = Math.min(discountCents, subtotalCents);
+
+      if (!coupon) {
+        throw new AppError('COUPON_NOT_FOUND', 'Invalid or unrecognized coupon code.', 404);
       }
+      if (!coupon.isActive) {
+        throw new AppError('COUPON_INACTIVE', 'This coupon code has been deactivated.', 400);
+      }
+      if (new Date(coupon.expiryDate) < new Date()) {
+        throw new AppError('COUPON_EXPIRED', 'This coupon code has expired.', 400);
+      }
+      if (subtotalCents < coupon.minOrderValueCents) {
+        const minValDollars = (coupon.minOrderValueCents / 100).toFixed(2);
+        throw new AppError(
+          'COUPON_MIN_ORDER_LIMIT',
+          `Minimum order subtotal of $${minValDollars} is required to apply this coupon.`,
+          400
+        );
+      }
+
+      const totalUsages = coupon.usedBy.reduce((acc, curr) => acc + curr.count, 0);
+      if (totalUsages >= coupon.usageLimit) {
+        throw new AppError('COUPON_LIMIT_EXCEEDED', 'This coupon has reached its maximum global usage limit.', 400);
+      }
+
+      const userUsage = coupon.usedBy.find((u) => u.userId.toString() === req.user?.userId);
+      if (userUsage && userUsage.count >= coupon.perUserLimit) {
+        throw new AppError('COUPON_USER_LIMIT_EXCEEDED', 'You have already reached the maximum usage limit for this coupon.', 400);
+      }
+
+      if (coupon.type === 'percentage') {
+        discountCents = Math.round(subtotalCents * (coupon.value / 100));
+      } else if (coupon.type === 'fixed') {
+        discountCents = coupon.value;
+      }
+      discountCents = Math.min(discountCents, subtotalCents);
     }
 
     const totalCents = Math.max(0, subtotalCents - discountCents);

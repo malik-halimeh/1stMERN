@@ -16,7 +16,7 @@ const SearchBox: React.FC<SearchBoxProps> = ({ value, onChange, onSubmit, placeh
       e.preventDefault();
       onSubmit?.();
     }}
-    className="inline-flex items-center gap-2 bg-surface rounded-input px-3 py-2 border border-text-disabled focus-within:border-primary/40 shadow-level1"
+    className="inline-flex items-center gap-2 bg-surface rounded-input px-3 py-2 border border-text-disabled focus-within:border-primary/40 shadow-level1 w-full sm:w-auto"
   >
     <Search className="h-4 w-4 text-text-muted flex-shrink-0" />
     <input
@@ -24,7 +24,7 @@ const SearchBox: React.FC<SearchBoxProps> = ({ value, onChange, onSubmit, placeh
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className="bg-transparent border-none text-secondary outline-none placeholder:text-text-muted text-sm w-56 focus:w-72 transition-all duration-300"
+      className="bg-transparent border-none text-secondary outline-none placeholder:text-text-muted text-sm w-full sm:w-56 sm:focus:w-72 transition-all duration-300"
     />
   </form>
 );

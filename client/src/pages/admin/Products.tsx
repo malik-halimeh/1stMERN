@@ -398,7 +398,7 @@ const AdminProducts = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-h1 font-bold text-primary-dark">Products</h1>
           <p className="mt-1 text-text-secondary">
@@ -464,7 +464,7 @@ const AdminProducts = () => {
         }
       >
         <div className="space-y-4">
-          <div className="flex gap-3">
+          <div className="flex flex-col sm:flex-row gap-3">
             <div className="flex-1">
               <label className="block text-label text-text-secondary mb-1">Name *</label>
               <input
@@ -474,7 +474,7 @@ const AdminProducts = () => {
                 placeholder="Product name"
               />
             </div>
-            <div className="w-40">
+            <div className="w-full sm:w-40">
               <label className="block text-label text-text-secondary mb-1">Brand</label>
               <input
                 className={inputClass}
@@ -495,7 +495,7 @@ const AdminProducts = () => {
             />
           </div>
 
-          <div className="flex gap-3">
+          <div className="flex flex-col sm:flex-row gap-3">
             <div className="flex-1">
               <label className="block text-label text-text-secondary mb-1">Category *</label>
               <select
@@ -511,7 +511,7 @@ const AdminProducts = () => {
                 ))}
               </select>
             </div>
-            <div className="w-40">
+            <div className="w-full sm:w-40">
               <label className="block text-label text-text-secondary mb-1">Base price ($) *</label>
               <input
                 type="number"

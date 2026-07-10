@@ -158,20 +158,21 @@ const Home: React.FC = () => {
   return (
     <StorefrontLayout>
       {/* 1. HERO SLIDER */}
-      <section className="relative h-[480px] bg-primary-dark overflow-hidden font-sans">
+      <section className="relative h-[420px] sm:h-[480px] bg-primary-dark overflow-hidden font-sans">
         <div className="absolute inset-0 flex transition-transform duration-700 ease-in-out" style={{ transform: `translateX(-${currentSlide * 100}%)` }}>
           {HERO_SLIDES.map((slide, idx) => (
             <div key={idx} className="min-w-full h-full flex items-center relative select-none">
               <div className="absolute inset-0 bg-gradient-to-r from-primary-dark/95 via-primary-dark/80 to-transparent z-10" />
-              <img src={slide.image} alt={slide.title} className="absolute right-0 top-0 h-full w-[50%] object-cover object-center" />
-              
-              {/* z-20 keeps the copy above the z-10 gradient overlay (z-25 is not a Tailwind class) */}
-              <div className="max-w-7xl mx-auto px-4 w-full z-20 relative text-left">
+              <img src={slide.image} alt={slide.title} className="absolute right-0 top-0 h-full w-2/3 md:w-[50%] object-cover object-center" />
+
+              {/* z-20 keeps the copy above the z-10 gradient overlay (z-25 is not a Tailwind class).
+                  Extra x-padding below 1400px keeps the copy clear of the slider arrows. */}
+              <div className="max-w-7xl mx-auto px-12 min-[1400px]:px-4 w-full z-20 relative text-left">
                 <div className="max-w-xl flex flex-col items-start gap-4">
                   <span className="bg-accent text-white text-[10px] font-extrabold px-3 py-1 rounded-full uppercase tracking-wider">
                     Featured Collection
                   </span>
-                  <h2 className="text-4xl md:text-5xl font-extrabold text-white leading-tight">
+                  <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold text-white leading-tight">
                     {slide.title}
                   </h2>
                   <p className="text-sm md:text-base text-white/80">
@@ -192,11 +193,11 @@ const Home: React.FC = () => {
         </div>
 
         {/* Navigation Buttons */}
-        <button onClick={prevSlide} className="absolute left-4 top-1/2 -translate-y-1/2 z-30 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors">
-          <ChevronLeft className="h-6 w-6" />
+        <button onClick={prevSlide} className="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-30 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors">
+          <ChevronLeft className="h-5 w-5 sm:h-6 sm:w-6" />
         </button>
-        <button onClick={nextSlide} className="absolute right-4 top-1/2 -translate-y-1/2 z-30 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors">
-          <ChevronRight className="h-6 w-6" />
+        <button onClick={nextSlide} className="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-30 p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors">
+          <ChevronRight className="h-5 w-5 sm:h-6 sm:w-6" />
         </button>
       </section>
 
@@ -208,13 +209,13 @@ const Home: React.FC = () => {
         </div>
 
         {loadingCats ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
             {Array.from({ length: 4 }).map((_, i) => (
               <Skeleton key={i} variant="rect" className="h-28 w-full rounded-card" />
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
             {categories.map((cat) => (
               <Link
                 key={cat._id}
@@ -235,7 +236,7 @@ const Home: React.FC = () => {
       <section className="bg-dashboard-section-bg/30 py-16 font-sans border-y border-dashboard-section-bg/50">
         <div className="max-w-7xl mx-auto px-4 grid grid-cols-1 md:grid-cols-2 gap-8">
           {/* Promo Box 1 */}
-          <div className="bg-surface border border-dashboard-section-bg rounded-card p-8 flex flex-col justify-between items-start h-60 relative overflow-hidden group shadow-level1">
+          <div className="bg-surface border border-dashboard-section-bg rounded-card p-6 sm:p-8 flex flex-col justify-between items-start gap-4 min-h-60 relative overflow-hidden group shadow-level1">
             <div className="absolute right-4 bottom-4 text-7xl opacity-10 group-hover:scale-110 transition-transform">⚡</div>
             <div className="max-w-xs flex flex-col gap-2 text-left">
               <span className="text-accent text-xs font-bold uppercase tracking-wider flex items-center gap-1">
@@ -250,7 +251,7 @@ const Home: React.FC = () => {
           </div>
 
           {/* Promo Box 2 */}
-          <div className="bg-primary-dark text-white rounded-card p-8 flex flex-col justify-between items-start h-60 relative overflow-hidden group shadow-level1">
+          <div className="bg-primary-dark text-white rounded-card p-6 sm:p-8 flex flex-col justify-between items-start gap-4 min-h-60 relative overflow-hidden group shadow-level1">
             <div className="absolute right-4 bottom-4 text-7xl opacity-10 group-hover:scale-110 transition-transform">🛡️</div>
             <div className="max-w-xs flex flex-col gap-2 text-left">
               <span className="text-secondary text-xs font-bold uppercase tracking-wider flex items-center gap-1">
@@ -279,13 +280,13 @@ const Home: React.FC = () => {
         </div>
 
         {loadingFeatured ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
             {Array.from({ length: 4 }).map((_, i) => (
               <Skeleton key={i} variant="rect" className="h-72 w-full rounded-card" />
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
             {featuredProducts.map((prod) => (
               <ProductCard
                 key={prod._id}
@@ -313,13 +314,13 @@ const Home: React.FC = () => {
         </div>
 
         {loadingRecent ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
             {Array.from({ length: 4 }).map((_, i) => (
               <Skeleton key={i} variant="rect" className="h-72 w-full rounded-card" />
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
             {recentlyAdded.map((prod) => (
               <ProductCard
                 key={prod._id}
@@ -343,13 +344,13 @@ const Home: React.FC = () => {
           </div>
 
           {loadingRecs ? (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
               {Array.from({ length: 4 }).map((_, i) => (
                 <Skeleton key={i} variant="rect" className="h-72 w-full rounded-card" />
               ))}
             </div>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
               {recommendations.map((prod) => (
                 <ProductCard
                   key={prod._id}

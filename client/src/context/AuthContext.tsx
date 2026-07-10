@@ -21,6 +21,7 @@ interface AuthContextType {
   loginWithGoogle: (credential: string) => Promise<IUser>;
   logout: () => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
+  resetPassword: (email: string, code: string, password: string) => Promise<IUser>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -190,9 +191,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // 5. Forgot Password Flow
+  // 5. Forgot Password Flow — emails a 6-digit reset code (like signup)
   const forgotPassword = async (email: string) => {
     await api.post('/auth/forgot-password', { email });
+  };
+
+  // 5b. Confirm the reset code + new password → opens the session
+  const resetPassword = async (email: string, code: string, password: string) => {
+    const response = await api.post('/auth/reset-password', { email, code, password });
+    return applySession(response.data.data);
   };
 
   return (
@@ -209,6 +216,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loginWithGoogle,
         logout,
         forgotPassword,
+        resetPassword,
       }}
     >
       {children}

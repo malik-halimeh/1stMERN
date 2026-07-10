@@ -53,10 +53,14 @@ const LowStockAlertSchema = new Schema<ILowStockAlert>(
   }
 );
 
-// Compound Index: Enforce one active alert per variant
-// (status: 1 is used in compound constraint to allow multiple 'resolved' alerts,
-// but only one 'active' alert. In MongoDB, if status is 'active', the unique index blocks duplicates).
-LowStockAlertSchema.index({ productId: 1, variantSku: 1, status: 1 }, { unique: true });
+// Partial unique index: at most ONE active alert per variant, while any number
+// of resolved alerts may accumulate over repeated low-stock/restock cycles.
+// (A plain unique index on {productId, variantSku, status} would also cap
+// resolved docs at one per variant, making the second resolve throw E11000.)
+LowStockAlertSchema.index(
+  { productId: 1, variantSku: 1 },
+  { unique: true, partialFilterExpression: { status: 'active' } }
+);
 
 export const LowStockAlert = mongoose.model<ILowStockAlert>('LowStockAlert', LowStockAlertSchema);
 export default LowStockAlert;

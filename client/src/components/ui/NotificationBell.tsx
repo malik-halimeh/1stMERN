@@ -99,7 +99,7 @@ const NotificationBell: React.FC = () => {
       </button>
 
       {open && (
-        <div className="absolute right-0 mt-2 w-80 bg-surface border border-text-disabled rounded-dropdown shadow-level2 z-50 overflow-hidden">
+        <div className="absolute -right-20 sm:right-0 mt-2 w-80 max-w-[calc(100vw-2rem)] bg-surface border border-text-disabled rounded-dropdown shadow-level2 z-50 overflow-hidden">
           <div className="px-4 py-2.5 border-b border-dashboard-section-bg bg-background text-caption font-bold text-text-secondary uppercase tracking-wider select-none">
             Notifications
           </div>

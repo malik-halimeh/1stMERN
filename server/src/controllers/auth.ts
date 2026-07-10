@@ -1,12 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
 import User, { IUser } from '../models/User.js';
 import { generateAccessToken, generateRefreshToken, hashString } from '../utils/tokens.js';
 import { AppError } from '../utils/errors.js';
-import { sendVerificationCodeEmail } from '../services/mailer.js';
+import { sendVerificationCodeEmail, sendPasswordResetCodeEmail } from '../services/mailer.js';
 import {
   RegisterValidator,
   LoginValidator,
@@ -444,41 +443,75 @@ export const forgotPassword = async (req: Request, res: Response, next: NextFunc
 
     const { email } = validationResult.data;
 
+    // Same-flow as signup: email a 6-digit code (hash stored, 15min TTL).
+    // Secure behavior to prevent email enumeration: identical response
+    // whether or not the account exists.
     const user = await User.findOne({ email });
-    if (!user) {
-      // Secure behavior to prevent email enumeration: return success regardless
-      res.status(200).json({
-        success: true,
-        data: {
-          message: 'If the email is registered, a password reset link has been logged.',
-        },
-      });
-      return;
+    if (user && user.isActive) {
+      const code = crypto.randomInt(100000, 1000000).toString();
+      user.passwordResetCodeHash = hashString(code);
+      user.passwordResetExpiresAt = new Date(Date.now() + VERIFICATION_CODE_TTL_MS);
+      await user.save();
+      await sendPasswordResetCodeEmail(user.email, code);
     }
-
-    // Generate short-lived reset token (JWT, 15min TTL)
-    const resetToken = jwt.sign(
-      { userId: user._id.toString(), type: 'reset' },
-      process.env.JWT_ACCESS_SECRET || 'fallback_access_secret_key_987654',
-      { expiresIn: '15m' }
-    );
-
-    const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
-    const resetLink = `${clientUrl}/reset-password?token=${resetToken}`;
-
-    // Stub service: Log reset details directly to console as specified
-    console.log('\n================== STUB EMAIL SERVICE ==================');
-    console.log(`To: ${user.email}`);
-    console.log('Subject: OptiCart Password Reset Request');
-    console.log(`Reset Link (Valid for 15 minutes):\n${resetLink}`);
-    console.log('========================================================\n');
 
     res.status(200).json({
       success: true,
       data: {
-        message: 'If the email is registered, a password reset link has been logged.',
+        message: 'If the email is registered, a password reset code has been sent.',
       },
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// 5b. POST /api/auth/reset-password — confirm the emailed code and set the new password
+export const resetPassword = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const validationResult = ResetPasswordValidator.safeParse(req.body);
+    if (!validationResult.success) {
+      const details = validationResult.error.errors.map((e) => ({
+        field: e.path.join('.'),
+        message: e.message,
+      }));
+      throw new AppError('AUTH_VALIDATION_FAILED', 'Input validation failed.', 400, details);
+    }
+
+    const { email, code, password } = validationResult.data;
+
+    const user = await User.findOne({ email });
+    if (!user || !user.passwordResetCodeHash) {
+      throw new AppError('AUTH_INVALID_CODE', 'Invalid reset code.', 401);
+    }
+
+    if (!user.passwordResetExpiresAt || user.passwordResetExpiresAt.getTime() < Date.now()) {
+      throw new AppError('AUTH_CODE_EXPIRED', 'The reset code has expired. Please request a new one.', 401);
+    }
+
+    if (hashString(code) !== user.passwordResetCodeHash) {
+      throw new AppError('AUTH_INVALID_CODE', 'Invalid reset code.', 401);
+    }
+
+    if (!user.isActive) {
+      throw new AppError('AUTH_ACCOUNT_DISABLED', 'Your account has been deactivated. Please contact support.', 403);
+    }
+
+    const salt = await bcrypt.genSalt(12);
+    user.passwordHash = await bcrypt.hash(password, salt);
+    user.passwordResetCodeHash = null;
+    user.passwordResetExpiresAt = null;
+
+    // Completing the code flow also proves ownership of the email address
+    if (user.isEmailVerified === false) {
+      user.isEmailVerified = true;
+      user.emailVerificationCodeHash = null;
+      user.emailVerificationExpiresAt = null;
+    }
+
+    // respondWithSession rotates the refresh token, which also revokes any
+    // session an attacker might have had before the password change.
+    await respondWithSession(res, user, 200);
   } catch (error) {
     next(error);
   }

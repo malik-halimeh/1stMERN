@@ -251,7 +251,7 @@ const AdminCoupons = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-h1 font-bold text-primary-dark">Coupons</h1>
           <p className="mt-1 text-text-secondary">
@@ -321,7 +321,7 @@ const AdminCoupons = () => {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-label text-text-secondary mb-1">Type *</label>
               <select
@@ -351,7 +351,7 @@ const AdminCoupons = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-label text-text-secondary mb-1">
                 Min order ($)
@@ -377,7 +377,7 @@ const AdminCoupons = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-label text-text-secondary mb-1">
                 Total usage limit *

@@ -67,7 +67,15 @@ export const sendVerificationCodeEmail = (email: string, code: string) => {
   );
 };
 
-export const sendOrderConfirmationEmail = (email: string, orderNumber: string, totalAmount: number) => {
+export const sendPasswordResetCodeEmail = (email: string, code: string) => {
+  return deliver(
+    email,
+    'Your OptiCart password reset code',
+    `We received a request to reset your OptiCart password.\n\nYour password reset code is: ${code}\n\nIt expires in 15 minutes. If you did not request a password reset, you can safely ignore this email — your password will not change.`
+  );
+};
+
+export const sendOrderConfirmationEmail =(email: string, orderNumber: string, totalAmount: number) => {
   return deliver(
     email,
     `We received your OptiCart order - ${orderNumber}`,

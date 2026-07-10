@@ -173,7 +173,7 @@ export function DataTable<T extends Record<string, any>>({
   return (
     <div className="w-full flex flex-col gap-4 font-sans text-secondary">
       {/* Table Toolbar */}
-      <div className="flex justify-between items-center bg-surface p-4 rounded-card border border-dashboard-section-bg/50 shadow-level1">
+      <div className="flex justify-between items-center gap-3 flex-wrap bg-surface p-4 rounded-card border border-dashboard-section-bg/50 shadow-level1">
         <span className="text-secondary font-medium">
           {selectedIds.size > 0 ? `${selectedIds.size} rows selected` : 'All items'}
         </span>
@@ -306,7 +306,7 @@ export function DataTable<T extends Record<string, any>>({
       </div>
 
       {/* Pagination Footer */}
-      <div className="flex justify-between items-center bg-surface p-4 border border-dashboard-section-bg rounded-card shadow-level1 select-none">
+      <div className="flex justify-between items-center gap-3 flex-wrap bg-surface p-4 border border-dashboard-section-bg rounded-card shadow-level1 select-none">
         <span className="text-secondary text-caption">
           {serverPagination
             ? `Showing ${data.length} of ${totalEntries} entries · page ${page} of ${totalPages}`

@@ -158,7 +158,7 @@ const Wishlist: React.FC = () => {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
           <Link to="/login?redirect=/wishlist">
             <Button variant="primary" icon={<LogIn className="h-4 w-4" />} className="text-xs py-1.5 px-3">
               Sign In
@@ -190,7 +190,7 @@ const Wishlist: React.FC = () => {
         </h1>
 
         {isLoading ? (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
             {Array.from({ length: 4 }).map((_, i) => (
               <Skeleton key={i} variant="rect" className="h-80 w-full rounded-card" />
             ))}
@@ -209,7 +209,7 @@ const Wishlist: React.FC = () => {
         ) : (
           <>
             <GuestBanner />
-            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
               {items.map((item) => {
                 const firstVariant = item.variants?.[0] || { sku: '', stock: 0, priceDeltaCents: 0, costPriceCents: 0, lowStockThreshold: 5 };
 

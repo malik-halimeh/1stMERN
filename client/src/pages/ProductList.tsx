@@ -310,16 +310,16 @@ const ProductList: React.FC = () => {
         {/* B. Products Content panel */}
         <div className="flex-grow flex flex-col gap-6">
           {/* Header toolbar */}
-          <div className="bg-surface border border-dashboard-section-bg/50 p-4 rounded-card shadow-level1 flex items-center justify-between gap-4 font-sans select-none">
-            <div className="text-left">
+          <div className="bg-surface border border-dashboard-section-bg/50 p-4 rounded-card shadow-level1 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 font-sans select-none">
+            <div className="text-left min-w-0">
               <span className="text-caption text-text-muted">Showing results for</span>
-              <h1 className="text-lg font-bold text-text-primary mt-0.5">
+              <h1 className="text-base sm:text-lg font-bold text-text-primary mt-0.5 break-words">
                 {searchParam ? `Search: "${searchParam}"` : categoryParam ? `Category: ${categoryParam}` : 'All Catalog Products'}
                 <span className="text-sm font-normal text-text-muted ml-2">({totalProducts} items)</span>
               </h1>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-shrink-0">
               {/* Mobile filter button */}
               <Button
                 variant="secondary"
@@ -349,7 +349,7 @@ const ProductList: React.FC = () => {
 
           {/* Catalog products grids */}
           {isLoading ? (
-            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
               {Array.from({ length: 6 }).map((_, i) => (
                 <Skeleton key={i} variant="rect" className="h-80 w-full rounded-card" />
               ))}
@@ -365,7 +365,7 @@ const ProductList: React.FC = () => {
               />
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
               {products.map((prod) => (
                 <ProductCard
                   key={prod._id}
@@ -421,6 +421,8 @@ const ProductList: React.FC = () => {
               <FiltersSidebarContent />
             </div>
           </div>
+          {/* Dismiss Click Area */}
+          <div className="flex-grow" onClick={() => setIsMobileFiltersOpen(false)} />
         </div>
       )}
     </StorefrontLayout>

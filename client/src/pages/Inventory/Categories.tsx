@@ -137,6 +137,8 @@ const Categories = () => {
                 flex
                 items-center
                 justify-between
+                gap-3
+                flex-wrap
             ">
 
 

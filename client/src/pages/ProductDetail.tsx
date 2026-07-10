@@ -322,7 +322,7 @@ const ProductDetail: React.FC = () => {
           {/* LEFT: Image Gallery w/ Zoom */}
           <div className="flex flex-col gap-4">
             <div
-              className="relative border border-dashboard-section-bg/50 rounded-card overflow-hidden bg-dashboard-section-bg/10 flex items-center justify-center cursor-zoom-in group h-[400px]"
+              className="relative border border-dashboard-section-bg/50 rounded-card overflow-hidden bg-dashboard-section-bg/10 flex items-center justify-center cursor-zoom-in group h-[300px] sm:h-[400px]"
               onMouseMove={handleMouseMove}
               onMouseLeave={handleMouseLeave}
             >
@@ -460,12 +460,12 @@ const ProductDetail: React.FC = () => {
 
         {/* Tabs details section */}
         <div className="border-t border-dashboard-section-bg pt-10 mt-6 text-left">
-          <div className="flex border-b border-dashboard-section-bg gap-6 select-none">
+          <div className="flex border-b border-dashboard-section-bg gap-4 sm:gap-6 select-none overflow-x-auto">
             {(['description', 'specifications', 'reviews'] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`text-sm font-bold uppercase tracking-wider pb-3 border-b-2 transition-all ${
+                className={`text-sm font-bold uppercase tracking-wider pb-3 border-b-2 transition-all whitespace-nowrap flex-shrink-0 ${
                   activeTab === tab
                     ? 'border-primary text-primary'
                     : 'border-transparent text-text-secondary hover:text-text-primary'
@@ -484,7 +484,7 @@ const ProductDetail: React.FC = () => {
             )}
 
             {activeTab === 'specifications' && (
-              <div className="max-w-xl border border-dashboard-section-bg rounded-card overflow-hidden">
+              <div className="max-w-xl border border-dashboard-section-bg rounded-card overflow-hidden overflow-x-auto">
                 <table className="min-w-full divide-y divide-dashboard-section-bg text-sm">
                   <tbody className="divide-y divide-dashboard-section-bg bg-surface">
                     <tr>
@@ -637,7 +637,7 @@ const ProductDetail: React.FC = () => {
         {relatedProducts.length > 0 && (
           <section className="border-t border-dashboard-section-bg/50 pt-10">
             <h3 className="text-xl font-bold text-text-primary text-left mb-6">Related Products</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
               {relatedProducts.map((prod) => (
                 <ProductCard
                   key={prod._id}
@@ -656,7 +656,7 @@ const ProductDetail: React.FC = () => {
         {recentlyViewed.length > 0 && (
           <section className="border-t border-dashboard-section-bg/50 pt-10">
             <h3 className="text-xl font-bold text-text-primary text-left mb-6">Recently Viewed</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
               {recentlyViewed.map((prod) => (
                 <ProductCard
                   key={prod._id}

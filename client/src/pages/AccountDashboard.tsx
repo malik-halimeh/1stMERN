@@ -390,7 +390,7 @@ const AccountDashboard: React.FC = () => {
                 {showAddressForm && (
                   <form onSubmit={handleAddAddress} className="bg-dashboard-section-bg/25 border border-dashboard-section-bg/50 p-4 rounded-card space-y-4 animate-slide-in">
                     <span className="text-xs font-bold text-text-secondary uppercase tracking-wider block">Add Shipping Address</span>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <Input
                         id="addr-label"
                         label="Label (e.g. Home, Office)"
@@ -504,7 +504,7 @@ const AccountDashboard: React.FC = () => {
                 </h2>
 
                 {wishlistLoading ? (
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <Skeleton variant="rect" className="h-56 w-full" />
                     <Skeleton variant="rect" className="h-56 w-full" />
                   </div>
@@ -517,7 +517,7 @@ const AccountDashboard: React.FC = () => {
                     onAction={() => navigate('/products')}
                   />
                 ) : (
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {wishlistItems.map((item: any) => {
                       const firstVariant = item.variants?.[0] || {};
                       const itemPrice = (item.basePriceCents || 0) + (firstVariant.priceDeltaCents || 0);

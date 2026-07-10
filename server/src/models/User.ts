@@ -25,6 +25,9 @@ export interface IUser extends Document {
   isEmailVerified: boolean;
   emailVerificationCodeHash?: string | null;
   emailVerificationExpiresAt?: Date | null;
+  // Password reset (forgot-password code flow), same shape as signup codes
+  passwordResetCodeHash?: string | null;
+  passwordResetExpiresAt?: Date | null;
   authProvider: 'local' | 'google';
   createdAt: Date;
   updatedAt: Date;
@@ -67,6 +70,8 @@ const UserSchema = new Schema<IUser>(
     isEmailVerified: { type: Boolean, default: true, required: true },
     emailVerificationCodeHash: { type: String, default: null },
     emailVerificationExpiresAt: { type: Date, default: null },
+    passwordResetCodeHash: { type: String, default: null },
+    passwordResetExpiresAt: { type: Date, default: null },
     authProvider: {
       type: String,
       enum: ['local', 'google'],

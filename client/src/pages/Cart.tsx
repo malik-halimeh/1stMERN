@@ -352,7 +352,7 @@ const Cart: React.FC = () => {
                     </div>
 
                     {/* Stepper & Line subtotals */}
-                    <div className="flex items-center justify-between sm:justify-end gap-6 w-full sm:w-auto mt-4 sm:mt-0 pt-4 sm:pt-0 border-t sm:border-t-0 border-dashboard-section-bg/30">
+                    <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-6 w-full sm:w-auto mt-4 sm:mt-0 pt-4 sm:pt-0 border-t sm:border-t-0 border-dashboard-section-bg/30 flex-wrap">
                       {/* Price per unit */}
                       <div className="text-right sm:min-w-[80px]">
                         <span className="text-xs text-text-muted block">Unit Price</span>

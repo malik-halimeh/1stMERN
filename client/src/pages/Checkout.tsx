@@ -434,7 +434,7 @@ const Checkout: React.FC = () => {
                 <form onSubmit={handleAddNewAddress} className="mt-4 bg-dashboard-section-bg/20 p-4 rounded-card border border-dashboard-section-bg/30 space-y-4 animate-slide-in">
                   <span className="text-xs font-bold text-text-secondary uppercase tracking-wider block">Add Shipping Address</span>
                   
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <Input
                       id="label"
                       label="Address Label"

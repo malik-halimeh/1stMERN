@@ -224,7 +224,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({
           }`}
       >
         {/* Sticky Top Bar */}
-        <header className="sticky top-0 z-20 bg-surface border-b border-dashboard-section-bg shadow-level1 h-16 flex items-center justify-between px-6">
+        <header className="sticky top-0 z-20 bg-surface border-b border-dashboard-section-bg shadow-level1 h-16 flex items-center justify-between px-4 sm:px-6">
           <div className="flex items-center gap-4">
             <button
               onClick={() => setIsMobileOpen(true)}
@@ -277,7 +277,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({
         </header>
 
         {/* Main Content Area */}
-        <main className="flex-grow p-6 bg-dashboard-section-bg/40">
+        <main className="flex-grow p-4 sm:p-6 bg-dashboard-section-bg/40 min-w-0">
           {children}
         </main>
       </div>

@@ -8,6 +8,7 @@ import {
   refresh,
   logout,
   forgotPassword,
+  resetPassword,
   updateProfile,
   getProfile,
 } from '../controllers/auth.js';
@@ -27,6 +28,7 @@ router.post('/resend-verification', authRateLimiter as any, resendVerification);
 router.post('/google', authRateLimiter as any, googleAuth);
 router.post('/login', authRateLimiter as any, login);
 router.post('/forgot-password', authRateLimiter as any, forgotPassword);
+router.post('/reset-password', authRateLimiter as any, resetPassword);
 
 // These do NOT touch the auth rate-limit counter:
 router.post('/refresh', refresh);

@@ -8,6 +8,7 @@ import { notFound, errorHandler } from './middleware/error.js';
 import { apiRateLimiter } from './middleware/rateLimiter.js';
 import apiRouter from './routes/index.js';
 import connectDB from './config/db.js';
+import LowStockAlert from './models/LowStockAlert.js';
 import { startScheduledJobs } from './services/scheduler.js';
 
 // Load environment variables
@@ -45,7 +46,16 @@ app.use(notFound);
 app.use(errorHandler);
 
 // Connect to MongoDB then start the server
-connectDB().then(() => {
+connectDB().then(async () => {
+  // Drop the stale {productId, variantSku, status} unique index (it capped
+  // RESOLVED alerts at one per variant → E11000 on the second resolve) and
+  // build the partial unique index defined on the schema. autoIndex only
+  // creates indexes, it never removes replaced ones — syncIndexes does both.
+  try {
+    await LowStockAlert.syncIndexes();
+  } catch (err: any) {
+    console.error('LowStockAlert index sync failed:', err.message);
+  }
   app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
     startScheduledJobs();

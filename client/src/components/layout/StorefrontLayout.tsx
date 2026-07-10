@@ -104,7 +104,7 @@ const StorefrontLayout: React.FC<StorefrontLayoutProps> = ({ children, breadcrum
     <div className="min-h-screen flex flex-col bg-background text-text-primary font-sans">
       {/* 1. Announcement Bar */}
       {showAnnounce && (
-        <div className="bg-primary-dark text-white px-4 py-2 text-center text-caption font-medium relative flex items-center justify-center select-none">
+        <div className="bg-primary-dark text-white pl-4 pr-10 py-2 text-center text-caption font-medium relative flex items-center justify-center select-none">
           <span>🎉 Grand Opening Special: Get 10% off all Major Appliances! Use code: OPTI10</span>
           <button
             onClick={() => setShowAnnounce(false)}
@@ -117,7 +117,7 @@ const StorefrontLayout: React.FC<StorefrontLayoutProps> = ({ children, breadcrum
 
       {/* 2. Sticky Header — single slim row: logo, category nav, actions */}
       <header className="sticky top-0 z-40 bg-surface border-b border-dashboard-section-bg shadow-level1">
-        <div className="max-w-7xl mx-auto px-4 py-2.5 flex items-center gap-6">
+        <div className="max-w-7xl mx-auto px-4 py-2.5 flex items-center gap-3 sm:gap-6">
           {/* Logo & Mobile Menu Toggle */}
           <div className="flex items-center gap-4">
             <button
@@ -441,7 +441,7 @@ const StorefrontLayout: React.FC<StorefrontLayoutProps> = ({ children, breadcrum
 
       {/* 6. Footer */}
       <footer className="bg-primary-dark text-white border-t border-text-secondary/20 font-sans mt-auto select-none">
-        <div className="max-w-7xl mx-auto px-4 py-12 grid grid-cols-1 md:grid-cols-4 gap-8">
+        <div className="max-w-7xl mx-auto px-4 py-10 sm:py-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
           <div>
             <h3 className="text-h3 font-bold text-white mb-4">OptiCart</h3>
             <p className="text-caption text-text-muted max-w-xs leading-relaxed">

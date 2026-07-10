@@ -9,6 +9,9 @@
     @apply bg-background text-text-primary font-sans antialiased;
     font-size: 16px;
     line-height: 1.5;
+    /* Hard stop against stray horizontal scroll on small screens.
+       Applied to body only (not html) so position: sticky keeps working. */
+    overflow-x: hidden;
   }
 
   /* Custom outline-focus system for accessibility */

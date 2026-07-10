@@ -192,7 +192,7 @@ const Users = () => {
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div>
                     <h1 className="text-2xl font-semibold text-text-primary">Users</h1>
                     <p className="mt-1 text-sm text-text-secondary">
@@ -332,7 +332,7 @@ const Users = () => {
                         </table>
 
                         {/* Server-side pagination footer */}
-                        <div className="flex items-center justify-between px-6 py-4 border-t border-dashboard-section-bg select-none">
+                        <div className="flex items-center justify-between gap-3 flex-wrap px-4 sm:px-6 py-4 border-t border-dashboard-section-bg select-none">
                             <span className="text-sm text-text-secondary">
                                 Showing {users.length} of {meta.total} entries · page {page} of{" "}
                                 {meta.pages}
