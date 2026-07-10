@@ -220,7 +220,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({
 
       {/* Main Body (Offset by Sidebar Width on Desktop) */}
       <div
-        className={`flex-grow flex flex-col min-h-screen transition-all duration-300 ${isCollapsed ? 'lg:pl-16' : 'lg:pl-64'
+        className={`flex-grow flex flex-col min-h-screen min-w-0 transition-all duration-300 ${isCollapsed ? 'lg:pl-16' : 'lg:pl-64'
           }`}
       >
         {/* Sticky Top Bar */}
