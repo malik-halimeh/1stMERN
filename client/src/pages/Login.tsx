@@ -5,7 +5,7 @@ import { useToast } from '../context/ToastContext.js';
 import Input from '../components/ui/Input.js';
 import Button from '../components/ui/Button.js';
 import GoogleSignInButton from '../components/ui/GoogleSignInButton.js';
-import { Lock, Mail } from 'lucide-react';
+import { ArrowLeft, Lock, Mail } from 'lucide-react';
 import { mergeGuestData } from '../utils/guestMerge.js';
 import { useShop } from '../context/ShopContext.js';
 
@@ -26,6 +26,9 @@ const Login: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    // Re-entry guard: a second click/Enter while the first attempt is still
+    // in flight would log in twice and stack duplicate success toasts
+    if (isSubmitting) return;
 
     // Read values straight from the form as well: browser autofill can fill
     // the fields without firing React onChange, leaving state empty on the
@@ -51,11 +54,13 @@ const Login: React.FC = () => {
         return;
       }
 
-      await mergeGuestData(addToast);
-      await refreshShopData();
-
+      // Navigate right away; the guest cart/wishlist sync runs in the
+      // background so a slow merge never leaves the user stuck on this page
       addToast('Welcome back! You have logged in successfully.', 'success');
       navigate(from, { replace: true });
+      mergeGuestData(addToast)
+        .then(() => refreshShopData())
+        .catch((err) => console.error('Post-login guest sync failed:', err));
     } catch (error: any) {
       // Unverified signup: a fresh code was just emailed — jump to code entry
       if (error.response?.data?.error?.code === 'AUTH_EMAIL_NOT_VERIFIED') {
@@ -81,10 +86,11 @@ const Login: React.FC = () => {
         return;
       }
 
-      await mergeGuestData(addToast);
-      await refreshShopData();
       addToast('Signed in with Google successfully.', 'success');
       navigate(from, { replace: true });
+      mergeGuestData(addToast)
+        .then(() => refreshShopData())
+        .catch((err) => console.error('Post-login guest sync failed:', err));
     } catch (error: any) {
       const errMsg = error.response?.data?.error?.message || 'Google sign-in failed.';
       addToast(errMsg, 'error');
@@ -94,6 +100,14 @@ const Login: React.FC = () => {
   return (
     <div className="min-h-screen bg-dashboard-bg flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 font-sans">
       <div className="max-w-md w-full space-y-8 bg-surface p-8 rounded-card border border-dashboard-section-bg/60 shadow-level2">
+        {/* Back to the store */}
+        <Link
+          to="/"
+          className="inline-flex items-center gap-1.5 text-sm font-semibold text-text-secondary hover:text-primary transition-colors"
+        >
+          <ArrowLeft className="h-4 w-4" /> Back to store
+        </Link>
+
         <div className="text-center">
           <Link to="/" className="text-display text-text-primary text-3xl font-extrabold tracking-tight select-none">
             Opti<span className="text-secondary">Cart</span>
