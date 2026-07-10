@@ -83,7 +83,7 @@ const Home: React.FC = () => {
     const fetchFeatured = async () => {
       try {
         // Query rating sorted products as featured
-        const res = await api.get('/products?sort=rating_desc&limit=4');
+        const res = await api.get('/products?sort=rating_desc&limit=4&inStock=1');
         if (res.data?.success) setFeaturedProducts(res.data.data);
       } catch (err) {
         console.error('Failed to load featured products:', err);
@@ -94,7 +94,7 @@ const Home: React.FC = () => {
 
     const fetchRecent = async () => {
       try {
-        const res = await api.get('/products?sort=newest&limit=4');
+        const res = await api.get('/products?sort=newest&limit=4&inStock=1');
         if (res.data?.success) setRecentlyAdded(res.data.data);
       } catch (err) {
         console.error('Failed to load recently added products:', err);

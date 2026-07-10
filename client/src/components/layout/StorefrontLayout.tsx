@@ -132,7 +132,7 @@ const StorefrontLayout: React.FC<StorefrontLayoutProps> = ({ children, breadcrum
 
     const delayDebounceFn = setTimeout(async () => {
       try {
-        const response = await api.get(`/products?search=${encodeURIComponent(searchQuery)}&limit=5`);
+        const response = await api.get(`/products?search=${encodeURIComponent(searchQuery)}&limit=5&inStock=1`);
         if (response.data?.success) {
           const mapped = response.data.data.map((p: any) => {
             const defaultVariant = p.variants?.[0];

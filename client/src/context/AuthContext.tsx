@@ -25,6 +25,10 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Local hint that a session cookie may exist. Without it, every guest page
+// load would fire a doomed POST /auth/refresh that 401s in the console.
+const SESSION_HINT_KEY = 'opticart_has_session';
+
 // Helper to decode JWT access token payload safely
 const decodeJwt = (token: string): { userId: string; role: string } | null => {
   try {
@@ -53,6 +57,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // 1. Silent Refresh on App Mount
   const silentRefresh = useCallback(async () => {
+    // Guests who never logged in have no refresh cookie — skip the doomed
+    // request entirely (avoids the 401 console noise and loads faster)
+    if (!localStorage.getItem(SESSION_HINT_KEY)) {
+      setIsLoading(false);
+      return;
+    }
+
     const epochAtStart = sessionEpochRef.current;
     const isStale = () => sessionEpochRef.current !== epochAtStart;
     try {
@@ -103,6 +114,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!isStale()) {
         setUser(null);
         setAccessToken(null);
+        localStorage.removeItem(SESSION_HINT_KEY);
       }
     } finally {
       setIsLoading(false);
@@ -118,6 +130,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // are async, so reading `user` right after login would still be stale).
   const applySession = (data: { accessToken: string; user: any }): IUser => {
     sessionEpochRef.current += 1; // invalidate any in-flight silent refresh
+    localStorage.setItem(SESSION_HINT_KEY, '1');
     setAccessToken(data.accessToken);
     const sessionUser: IUser = {
       id: data.user.id,
@@ -173,6 +186,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       sessionEpochRef.current += 1;
       setUser(null);
       setAccessToken(null);
+      localStorage.removeItem(SESSION_HINT_KEY);
     }
   };
 

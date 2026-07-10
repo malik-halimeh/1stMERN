@@ -45,9 +45,15 @@ export const getProducts = async (req: Request, res: Response, next: NextFunctio
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 20));
     const skip = (page - 1) * limit;
 
-    const { category, minPrice, maxPrice, rating, sort, search } = req.query;
+    const { category, minPrice, maxPrice, rating, sort, search, inStock } = req.query;
 
     const filter: Record<string, any> = {};
+
+    // Storefront passes inStock=1 so sold-out products (every variant at 0)
+    // never show in the shop; the admin catalog omits it and sees everything
+    if (inStock === '1' || inStock === 'true') {
+      filter.variants = { $elemMatch: { stock: { $gt: 0 } } };
+    }
 
     // Category Filter
     if (category) {

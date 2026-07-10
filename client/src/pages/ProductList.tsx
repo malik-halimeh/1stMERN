@@ -99,6 +99,7 @@ const ProductList: React.FC = () => {
         if (ratingParam) queryParams.set('rating', ratingParam);
         if (sortParam) queryParams.set('sort', sortParam);
         if (searchParam) queryParams.set('search', searchParam);
+        queryParams.set('inStock', '1'); // storefront never lists sold-out products
 
         const res = await api.get(`/products?${queryParams.toString()}`);
         if (res.data?.success) {
