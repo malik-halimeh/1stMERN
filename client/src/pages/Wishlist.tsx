@@ -8,6 +8,7 @@ import Button from '../components/ui/Button.js';
 import EmptyState from '../components/ui/EmptyState.js';
 import { useToast } from '../context/ToastContext.js';
 import { useAuth } from '../context/AuthContext.js';
+import { useShop } from '../context/ShopContext.js';
 import api from '../services/api.js';
 
 // ─── localStorage helpers ────────────────────────────────────────────────────
@@ -67,6 +68,7 @@ const Wishlist: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { addToast } = useToast();
+  const { addItemToCart, removeWishlistId } = useShop();
 
   const [items, setItems] = useState<WishlistItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -105,13 +107,14 @@ const Wishlist: React.FC = () => {
     load();
   }, [user]);
 
-  // ── Remove handler ─────────────────────────────────────────────────────────
+  // ── Remove handler — also syncs the shared wishlist badge ──────────────────
   const handleRemove = async (productId: string) => {
     if (user) {
       try {
         const res = await api.delete(`/wishlist/${productId}`);
         if (res.data?.success) {
           setItems((prev) => prev.filter((i) => i._id !== productId));
+          removeWishlistId(productId);
           addToast('Item removed from wishlist.', 'success');
         }
       } catch {
@@ -120,11 +123,12 @@ const Wishlist: React.FC = () => {
     } else {
       removeFromGuestWishlist(productId);
       setItems((prev) => prev.filter((i) => i._id !== productId));
+      removeWishlistId(productId);
       addToast('Item removed from wishlist.', 'success');
     }
   };
 
-  // ── Move to cart ───────────────────────────────────────────────────────────
+  // ── Move to cart — updates the shared cart badge ───────────────────────────
   const handleMoveToCart = async (productId: string, variantSku: string) => {
     if (!user) {
       addToast('Please sign in to add items to your cart.', 'warning');
@@ -132,11 +136,9 @@ const Wishlist: React.FC = () => {
       return;
     }
     try {
-      const res = await api.post('/cart/items', { productId, variantSku, quantity: 1 });
-      if (res.data?.success) {
-        addToast('Product added to shopping cart.', 'success');
-        await handleRemove(productId);
-      }
+      await addItemToCart(productId, variantSku, 1);
+      addToast('Product added to shopping cart.', 'success');
+      await handleRemove(productId);
     } catch (err: any) {
       const msg = err.response?.data?.error?.message || 'Could not move item to cart.';
       addToast(msg, 'error');
@@ -182,7 +184,7 @@ const Wishlist: React.FC = () => {
   };
 
   return (
-    <StorefrontLayout breadcrumbs={[{ label: 'Home', path: '/' }, { label: 'My Wishlist' }]}>
+    <StorefrontLayout breadcrumbs={[{ label: 'Home', href: '/' }, { label: 'My Wishlist' }]}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 font-sans">
         <h1 className="text-3xl font-bold text-text-primary text-left mb-6 flex items-center gap-2">
           <Heart className="h-7 w-7 text-danger fill-current" /> My Wishlist

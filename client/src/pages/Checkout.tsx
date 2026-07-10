@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
-import { MapPin, CreditCard, CheckCircle2, ChevronDown, ChevronUp, Landmark, ShieldCheck, HelpCircle } from 'lucide-react';
+import { MapPin, CreditCard, ChevronDown, ChevronUp, ShieldCheck } from 'lucide-react';
 import StorefrontLayout from '../components/layout/StorefrontLayout.js';
 import Button from '../components/ui/Button.js';
 import Input from '../components/ui/Input.js';
@@ -33,8 +33,6 @@ interface CheckoutSessionData {
 }
 
 const CheckoutForm: React.FC<{ clientSecret: string; paymentIntentId: string; totalCents: number; onPaymentSuccess: () => void }> = ({
-  clientSecret,
-  paymentIntentId,
   totalCents,
   onPaymentSuccess,
 }) => {
@@ -79,7 +77,7 @@ const CheckoutForm: React.FC<{ clientSecret: string; paymentIntentId: string; to
       <Button
         type="submit"
         variant="primary"
-        loading={isProcessing}
+        isLoading={isProcessing}
         disabled={!stripe || !elements}
         className="w-full py-3 font-bold flex justify-center text-sm"
       >
@@ -163,7 +161,7 @@ const MockPaymentForm: React.FC<{ paymentIntentId: string; totalCents: number; o
       <Button
         type="submit"
         variant="primary"
-        loading={isProcessing}
+        isLoading={isProcessing}
         className="w-full py-3 font-bold flex justify-center text-sm"
       >
         Pay ${(totalCents / 100).toFixed(2)} (Sandbox Mode)
@@ -238,7 +236,7 @@ const Checkout: React.FC = () => {
 
       const res = await api.patch('/auth/profile', { addresses: updatedAddresses });
       if (res.data?.success) {
-        setUser({ ...user, addresses: res.data.data.addresses });
+        setUser((prev) => (prev ? { ...prev, addresses: res.data.data.addresses } : prev));
         addToast('Shipping address added successfully.', 'success');
         
         // Reset form
@@ -309,7 +307,7 @@ const Checkout: React.FC = () => {
 
   // Polling loop
   useEffect(() => {
-    let timer: NodeJS.Timeout;
+    let timer: ReturnType<typeof setTimeout>;
     let attempts = 0;
     const maxAttempts = 15; // 30s timeout
 
@@ -351,7 +349,7 @@ const Checkout: React.FC = () => {
   const mockSecret = sessionData?.clientSecret.startsWith('mock_secret_');
 
   return (
-    <StorefrontLayout breadcrumbs={[{ label: 'Home', path: '/' }, { label: 'Cart', path: '/cart' }, { label: 'Checkout' }]}>
+    <StorefrontLayout breadcrumbs={[{ label: 'Home', href: '/' }, { label: 'Cart', href: '/cart' }, { label: 'Checkout' }]}>
       <div className="max-w-3xl mx-auto px-4 py-8 font-sans">
         
         {/* Progress Tracker bar */}
@@ -488,7 +486,7 @@ const Checkout: React.FC = () => {
                   <Button
                     type="submit"
                     variant="secondary"
-                    loading={isSavingAddress}
+                    isLoading={isSavingAddress}
                     className="w-full py-2.5 text-xs text-center"
                   >
                     Save & Select Address

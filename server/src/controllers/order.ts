@@ -319,8 +319,11 @@ export const getOrders = async (req: Request, res: Response, next: NextFunction)
     const skip = (page - 1) * limit;
 
     // Staff (fulfillment queue) see all orders, optionally filtered by status;
-    // customers only ever see their own
-    const isStaff = req.user.role === 'inventory_manager' || req.user.role === 'super_admin';
+    // customers only ever see their own. `?scope=mine` forces the personal
+    // view (My Account) so staff also see just their OWN orders there.
+    const mineOnly = req.query.scope === 'mine';
+    const isStaff =
+      !mineOnly && (req.user.role === 'inventory_manager' || req.user.role === 'super_admin');
     const filter: Record<string, unknown> = isStaff
       ? {}
       : { userId: new mongoose.Types.ObjectId(req.user.userId) };
@@ -381,6 +384,64 @@ export const getOrderDetails = async (req: Request, res: Response, next: NextFun
     if (order.userId.toString() !== req.user.userId && req.user.role === 'customer') {
       throw new AppError('AUTH_FORBIDDEN', 'Access denied. You do not own this order.', 403);
     }
+
+    res.status(200).json({
+      success: true,
+      data: order,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// 6b. POST /api/orders/:id/feedback - Order owner leaves feedback once the
+// order has been confirmed by staff (any status beyond 'pending').
+export const submitOrderFeedback = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) {
+      throw new AppError('AUTH_UNAUTHORIZED', 'Session is not authenticated.', 401);
+    }
+
+    const { id } = req.params;
+    const { rating, text } = req.body;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      throw new AppError('VALIDATION_FAILED', 'Invalid order ID format.', 422);
+    }
+
+    const parsedRating = parseInt(rating);
+    if (isNaN(parsedRating) || parsedRating < 1 || parsedRating > 5) {
+      throw new AppError('VALIDATION_FAILED', 'Rating must be a number between 1 and 5.', 422);
+    }
+    if (!text || typeof text !== 'string' || !text.trim()) {
+      throw new AppError('VALIDATION_FAILED', 'Feedback text is required.', 422);
+    }
+
+    const order = await Order.findById(id);
+    if (!order) {
+      throw new AppError('ORDER_NOT_FOUND', 'Order not found.', 404);
+    }
+
+    // Only the order owner can leave feedback
+    if (order.userId.toString() !== req.user.userId) {
+      throw new AppError('AUTH_FORBIDDEN', 'You can only leave feedback on your own orders.', 403);
+    }
+
+    // Feedback opens once staff has confirmed the order
+    if (order.status === 'pending') {
+      throw new AppError(
+        'ORDER_NOT_CONFIRMED',
+        'Feedback is available after your order has been confirmed.',
+        409
+      );
+    }
+
+    order.feedback = {
+      rating: parsedRating,
+      text: text.trim().slice(0, 2000),
+      createdAt: new Date(),
+    };
+    await order.save();
 
     res.status(200).json({
       success: true,
@@ -458,7 +519,7 @@ export const updateOrderStatus = async (req: Request, res: Response, next: NextF
     // Fire status-change email (non-blocking)
     try {
       const buyer = await User.findById(order.userId);
-      if (buyer && ['shipped', 'delivered', 'cancelled', 'refunded'].includes(status)) {
+      if (buyer && ['confirmed', 'shipped', 'delivered', 'cancelled', 'refunded'].includes(status)) {
         sendOrderStatusChangeEmail(buyer.email, order.orderNumber, status);
       }
     } catch (mailErr: any) {

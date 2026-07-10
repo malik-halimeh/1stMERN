@@ -19,6 +19,13 @@ export interface IUser extends Document {
   prevRefreshTokenExpiresAt?: Date | null;
   addresses: IAddress[];
   isActive: boolean;
+  // Email ownership verification (signup code flow). Defaults to true so
+  // legacy/seeded accounts keep working; new signups explicitly set false
+  // until the emailed code is confirmed. Google sign-ins are pre-verified.
+  isEmailVerified: boolean;
+  emailVerificationCodeHash?: string | null;
+  emailVerificationExpiresAt?: Date | null;
+  authProvider: 'local' | 'google';
   createdAt: Date;
   updatedAt: Date;
 }
@@ -57,6 +64,15 @@ const UserSchema = new Schema<IUser>(
     prevRefreshTokenExpiresAt: { type: Date, default: null },
     addresses: [AddressSchema],
     isActive: { type: Boolean, default: true, required: true },
+    isEmailVerified: { type: Boolean, default: true, required: true },
+    emailVerificationCodeHash: { type: String, default: null },
+    emailVerificationExpiresAt: { type: Date, default: null },
+    authProvider: {
+      type: String,
+      enum: ['local', 'google'],
+      default: 'local',
+      required: true,
+    },
   },
   {
     timestamps: true,

@@ -39,6 +39,7 @@ let refreshPromise: Promise<string> | null = null;
 
 export const refreshAccessToken = (): Promise<string> => {
   if (!refreshPromise) {
+    const tokenAtStart = memoryToken;
     refreshPromise = axios
       .post(`${API_URL}/auth/refresh`, {}, { withCredentials: true })
       .then((response) => {
@@ -50,7 +51,11 @@ export const refreshAccessToken = (): Promise<string> => {
         return token;
       })
       .catch((error) => {
-        setAccessToken(null);
+        // Don't wipe a token that a login/register set while this refresh
+        // was in flight — only clear if nothing replaced it meanwhile.
+        if (memoryToken === tokenAtStart) {
+          setAccessToken(null);
+        }
         throw error;
       })
       .finally(() => {

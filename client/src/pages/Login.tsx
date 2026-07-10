@@ -4,16 +4,18 @@ import { useAuth } from '../context/AuthContext.js';
 import { useToast } from '../context/ToastContext.js';
 import Input from '../components/ui/Input.js';
 import Button from '../components/ui/Button.js';
+import GoogleSignInButton from '../components/ui/GoogleSignInButton.js';
 import { Lock, Mail } from 'lucide-react';
-import { getGuestWishlist, clearGuestWishlist } from './Wishlist.js';
-import api from '../services/api.js';
+import { mergeGuestData } from '../utils/guestMerge.js';
+import { useShop } from '../context/ShopContext.js';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
+  const { refreshShopData } = useShop();
   const { addToast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -22,53 +24,54 @@ const Login: React.FC = () => {
   const searchParams = new URLSearchParams(location.search);
   const from = searchParams.get('redirect') || '/account';
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!email || !password) {
+
+    // Read values straight from the form as well: browser autofill can fill
+    // the fields without firing React onChange, leaving state empty on the
+    // first click (the old "click Login twice" bug).
+    const formData = new FormData(e.currentTarget);
+    const emailValue = (email || String(formData.get('email') || '')).trim();
+    const passwordValue = password || String(formData.get('password') || '');
+
+    if (!emailValue || !passwordValue) {
       addToast('Please enter both email and password.', 'warning');
       return;
     }
 
     setIsSubmitting(true);
     try {
-      await login(email, password);
-      
-      // Cart merge-on-login logic
-      const guestCartStored = localStorage.getItem('guest_cart');
-      if (guestCartStored) {
-        try {
-          const parsed = JSON.parse(guestCartStored);
-          if (parsed && Array.isArray(parsed.items) && parsed.items.length > 0) {
-            await api.post('/cart/merge', { items: parsed.items });
-            addToast('Synchronized guest cart with your account.', 'success');
-          }
-        } catch (mergeErr) {
-          console.error('Guest cart merge failed:', mergeErr);
-        } finally {
-          localStorage.removeItem('guest_cart');
-        }
-      }
-
-      // Wishlist merge-on-login logic
-      const guestWishlist = getGuestWishlist();
-      if (guestWishlist && guestWishlist.length > 0) {
-        try {
-          await api.post('/wishlist/merge', { productIds: guestWishlist });
-          addToast('Synchronized guest wishlist with your account.', 'success');
-        } catch (mergeErr) {
-          console.error('Guest wishlist merge failed:', mergeErr);
-        } finally {
-          clearGuestWishlist();
-        }
-      }
+      await login(emailValue, passwordValue);
+      await mergeGuestData(addToast);
+      await refreshShopData();
 
       addToast('Welcome back! You have logged in successfully.', 'success');
       navigate(from, { replace: true });
     } catch (error: any) {
+      // Unverified signup: a fresh code was just emailed — jump to code entry
+      if (error.response?.data?.error?.code === 'AUTH_EMAIL_NOT_VERIFIED') {
+        addToast('Please verify your email. We just sent you a new code.', 'warning');
+        navigate(`/register?verify=${encodeURIComponent(emailValue)}`);
+        return;
+      }
       const errMsg = error.response?.data?.error?.message || 'Login failed. Please check your credentials.';
       addToast(errMsg, 'error');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // Google sign-in — verified by Google, no code flow needed
+  const handleGoogleCredential = async (credential: string) => {
+    try {
+      await loginWithGoogle(credential);
+      await mergeGuestData(addToast);
+      await refreshShopData();
+      addToast('Signed in with Google successfully.', 'success');
+      navigate(from, { replace: true });
+    } catch (error: any) {
+      const errMsg = error.response?.data?.error?.message || 'Google sign-in failed.';
+      addToast(errMsg, 'error');
     }
   };
 
@@ -92,6 +95,7 @@ const Login: React.FC = () => {
           <div className="space-y-4">
             <Input
               id="email-address"
+              name="email"
               label="Email Address"
               type="email"
               placeholder="you@example.com"
@@ -104,6 +108,7 @@ const Login: React.FC = () => {
 
             <Input
               id="password"
+              name="password"
               label="Password"
               type="password"
               placeholder="••••••••"
@@ -146,6 +151,8 @@ const Login: React.FC = () => {
             </Button>
           </div>
         </form>
+
+        <GoogleSignInButton onCredential={handleGoogleCredential} text="signin_with" />
       </div>
     </div>
   );

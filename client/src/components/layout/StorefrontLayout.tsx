@@ -4,6 +4,7 @@ import { Search, User, Heart, ShoppingBag, X, Menu, ChevronDown, ChevronRight, C
 import Breadcrumb from '../ui/Breadcrumb.js';
 import type { BreadcrumbItem } from '../ui/Breadcrumb.js';
 import { useAuth } from '../../context/AuthContext.js';
+import { useShop } from '../../context/ShopContext.js';
 import api from '../../services/api.js';
 
 interface StorefrontLayoutProps {
@@ -59,6 +60,8 @@ const StorefrontLayout: React.FC<StorefrontLayoutProps> = ({ children, breadcrum
 
   // Auth state
   const { user, isAuthenticated, logout } = useAuth();
+  // Live cart quantity + wishlist size for the header badges
+  const { cartCount, wishlistIds } = useShop();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
@@ -298,16 +301,14 @@ const StorefrontLayout: React.FC<StorefrontLayoutProps> = ({ children, breadcrum
                     </div>
 
                     <div className="mt-1 flex flex-col">
-                      {/* Account page (customers) */}
-                      {user.role === 'customer' && (
-                        <Link
-                          to="/account"
-                          onClick={() => setShowUserMenu(false)}
-                          className="flex items-center gap-2 px-4 py-2 text-sm text-text-secondary hover:bg-dashboard-section-bg transition-colors"
-                        >
-                          <User className="h-4 w-4 text-text-muted" /> My Account
-                        </Link>
-                      )}
+                      {/* Account page — all roles can shop, order, and manage addresses */}
+                      <Link
+                        to="/account"
+                        onClick={() => setShowUserMenu(false)}
+                        className="flex items-center gap-2 px-4 py-2 text-sm text-text-secondary hover:bg-dashboard-section-bg transition-colors"
+                      >
+                        <User className="h-4 w-4 text-text-muted" /> My Account
+                      </Link>
 
                       {/* Admin panel (manager / admin) */}
                       {(user.role === 'inventory_manager' || user.role === 'super_admin') && (
@@ -348,6 +349,11 @@ const StorefrontLayout: React.FC<StorefrontLayoutProps> = ({ children, breadcrum
               aria-label="Wishlist"
             >
               <Heart className="h-5 w-5" />
+              {wishlistIds.length > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 h-4 min-w-4 px-1 rounded-full bg-danger text-white text-[9px] font-bold flex items-center justify-center leading-none select-none">
+                  {wishlistIds.length > 99 ? '99+' : wishlistIds.length}
+                </span>
+              )}
             </Link>
             <Link
               to="/cart"
@@ -355,6 +361,11 @@ const StorefrontLayout: React.FC<StorefrontLayoutProps> = ({ children, breadcrum
               aria-label="Cart"
             >
               <ShoppingBag className="h-5 w-5" />
+              {cartCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 h-4 min-w-4 px-1 rounded-full bg-primary text-white text-[9px] font-bold flex items-center justify-center leading-none select-none">
+                  {cartCount > 99 ? '99+' : cartCount}
+                </span>
+              )}
             </Link>
           </div>
 
@@ -544,15 +555,13 @@ const StorefrontLayout: React.FC<StorefrontLayoutProps> = ({ children, breadcrum
                     </div>
                   </div>
 
-                  {user.role === 'customer' && (
-                    <Link
-                      to="/account"
-                      onClick={() => setIsMobileMenuOpen(false)}
-                      className="flex items-center gap-2 px-3 py-2 text-sm text-text-secondary hover:bg-dashboard-section-bg rounded-btn"
-                    >
-                      <User className="h-4 w-4 text-text-muted" /> My Account
-                    </Link>
-                  )}
+                  <Link
+                    to="/account"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                    className="flex items-center gap-2 px-3 py-2 text-sm text-text-secondary hover:bg-dashboard-section-bg rounded-btn"
+                  >
+                    <User className="h-4 w-4 text-text-muted" /> My Account
+                  </Link>
                   {(user.role === 'inventory_manager' || user.role === 'super_admin') && (
                     <Link
                       to="/admin/dashboard"

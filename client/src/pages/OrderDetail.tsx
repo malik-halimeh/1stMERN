@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ClipboardList, Star, ShieldCheck, MapPin, Truck, ChevronRight, MessageSquare } from 'lucide-react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { Star, MapPin, MessageSquare } from 'lucide-react';
 import StorefrontLayout from '../components/layout/StorefrontLayout.js';
 import Button from '../components/ui/Button.js';
-import Input from '../components/ui/Input.js';
 import Skeleton from '../components/ui/Skeleton.js';
 import Modal from '../components/ui/Modal.js';
 import { useToast } from '../context/ToastContext.js';
@@ -32,6 +31,7 @@ interface OrderDetails {
     country: string;
   };
   status: 'pending' | 'confirmed' | 'processing' | 'shipped' | 'delivered' | 'cancelled' | 'refunded';
+  feedback?: { rating: number; text: string; createdAt: string } | null;
   createdAt: string;
 }
 
@@ -48,6 +48,12 @@ const OrderDetail: React.FC = () => {
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState('');
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+
+  // Order feedback state
+  const [feedbackRating, setFeedbackRating] = useState(5);
+  const [feedbackText, setFeedbackText] = useState('');
+  const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
+  const [editingFeedback, setEditingFeedback] = useState(false);
 
   useEffect(() => {
     const fetchOrder = async () => {
@@ -85,6 +91,32 @@ const OrderDetail: React.FC = () => {
     setReviewComment('');
   };
 
+  // Submit feedback about the overall order experience
+  const handleSubmitFeedback = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!order) return;
+    if (!feedbackText.trim()) {
+      addToast('Please write your feedback first.', 'warning');
+      return;
+    }
+    try {
+      setIsSubmittingFeedback(true);
+      const res = await api.post(`/orders/${order._id}/feedback`, {
+        rating: feedbackRating,
+        text: feedbackText.trim(),
+      });
+      if (res.data?.success) {
+        setOrder(res.data.data);
+        setEditingFeedback(false);
+        addToast('Thank you! Your feedback has been recorded.', 'success');
+      }
+    } catch (err) {
+      addToast(getApiErrorMessage(err, 'Failed to submit order feedback.'), 'error');
+    } finally {
+      setIsSubmittingFeedback(false);
+    }
+  };
+
   const handleSubmitReview = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedProductReview) return;
@@ -113,7 +145,7 @@ const OrderDetail: React.FC = () => {
   };
 
   return (
-    <StorefrontLayout breadcrumbs={[{ label: 'Home', path: '/' }, { label: 'Account', path: '/account' }, { label: 'Order Tracking' }]}>
+    <StorefrontLayout breadcrumbs={[{ label: 'Home', href: '/' }, { label: 'Account', href: '/account' }, { label: 'Order Tracking' }]}>
       <div className="max-w-4xl mx-auto px-4 py-8 font-sans">
         
         {isLoading ? (
@@ -258,6 +290,90 @@ const OrderDetail: React.FC = () => {
               </div>
             </div>
 
+            {/* Order Feedback — opens once staff has confirmed the order */}
+            {order.status !== 'pending' && (
+              <div className="bg-surface border border-dashboard-section-bg/50 rounded-card p-6 shadow-level1 space-y-4">
+                <h3 className="text-sm font-bold text-text-primary uppercase tracking-wider border-b border-dashboard-section-bg pb-3 flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4 text-primary" /> Your Order Feedback
+                </h3>
+
+                {order.feedback && !editingFeedback ? (
+                  <div className="space-y-2 text-left">
+                    <div className="flex items-center gap-2">
+                      <div className="flex text-amber-400">
+                        {[1, 2, 3, 4, 5].map((s) => (
+                          <Star
+                            key={s}
+                            className={`h-4 w-4 ${s <= order.feedback!.rating ? 'fill-current' : 'text-text-disabled'}`}
+                          />
+                        ))}
+                      </div>
+                      <span className="text-[10px] text-text-muted">
+                        {new Date(order.feedback.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <p className="text-sm text-text-secondary leading-relaxed">{order.feedback.text}</p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFeedbackRating(order.feedback!.rating);
+                        setFeedbackText(order.feedback!.text);
+                        setEditingFeedback(true);
+                      }}
+                      className="text-xs font-semibold text-secondary hover:text-accent transition-colors"
+                    >
+                      Edit feedback
+                    </button>
+                  </div>
+                ) : (
+                  <form onSubmit={handleSubmitFeedback} className="space-y-4 text-left">
+                    <p className="text-xs text-text-muted">
+                      How was your experience with this order (delivery, packaging, service)?
+                    </p>
+                    <div className="flex gap-1 text-amber-400">
+                      {[1, 2, 3, 4, 5].map((stars) => (
+                        <button
+                          key={stars}
+                          type="button"
+                          onClick={() => setFeedbackRating(stars)}
+                          className="focus:outline-none"
+                        >
+                          <Star className={`h-6 w-6 ${stars <= feedbackRating ? 'fill-current' : 'text-text-disabled'}`} />
+                        </button>
+                      ))}
+                    </div>
+                    <textarea
+                      className="w-full min-h-[90px] border border-text-disabled rounded-input p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                      placeholder="Tell us about your order experience..."
+                      value={feedbackText}
+                      onChange={(e) => setFeedbackText(e.target.value)}
+                      required
+                    />
+                    <div className="flex justify-end gap-3">
+                      {editingFeedback && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={() => setEditingFeedback(false)}
+                          className="py-1.5 px-4 text-xs"
+                        >
+                          Cancel
+                        </Button>
+                      )}
+                      <Button
+                        type="submit"
+                        variant="primary"
+                        isLoading={isSubmittingFeedback}
+                        className="py-1.5 px-5 text-xs font-bold"
+                      >
+                        {order.feedback ? 'Update Feedback' : 'Submit Feedback'}
+                      </Button>
+                    </div>
+                  </form>
+                )}
+              </div>
+            )}
+
           </div>
         )}
 
@@ -307,7 +423,7 @@ const OrderDetail: React.FC = () => {
                 <Button
                   type="submit"
                   variant="primary"
-                  loading={isSubmittingReview}
+                  isLoading={isSubmittingReview}
                   className="py-1.5 px-5 text-xs font-bold"
                 >
                   Submit Review

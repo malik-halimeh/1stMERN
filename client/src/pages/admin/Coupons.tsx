@@ -38,7 +38,7 @@ const AdminCoupons = () => {
     return coupons.filter((c) => c.code.toLowerCase().includes(term));
   }, [coupons, search]);
 
-  const canManage = user?.role === 'inventory_manager';
+  const canManage = user?.role === 'inventory_manager' || user?.role === 'super_admin';
 
   const fetchCoupons = useCallback(async () => {
     try {

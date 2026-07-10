@@ -25,6 +25,7 @@ interface OrderRow {
   items: Array<{ name: string; quantity: number }>;
   totalCents: number;
   status: OrderStatus;
+  feedback?: { rating: number; text: string; createdAt: string } | null;
   createdAt: string;
 }
 
@@ -84,8 +85,8 @@ const AdminOrders = () => {
   const [meta, setMeta] = useState({ total: 0, pages: 1 });
   const [reloadKey, setReloadKey] = useState(0);
 
-  // Super admins get read-only visibility; only managers advance statuses
-  const canAdvance = user?.role === 'inventory_manager';
+  // Managers and super admins can both advance order statuses
+  const canAdvance = user?.role === 'inventory_manager' || user?.role === 'super_admin';
 
   useEffect(() => {
     const controller = new AbortController();
@@ -192,6 +193,22 @@ const AdminOrders = () => {
       sortable: true,
       render: (row) => <StatusBadge status={row.status} />,
     },
+    {
+      key: 'feedback',
+      label: 'Feedback',
+      render: (row) =>
+        row.feedback ? (
+          <span
+            className="text-amber-500 font-semibold text-xs cursor-help"
+            title={row.feedback.text}
+          >
+            {'★'.repeat(row.feedback.rating)}
+            <span className="text-text-disabled">{'★'.repeat(5 - row.feedback.rating)}</span>
+          </span>
+        ) : (
+          <span className="text-caption text-text-muted">—</span>
+        ),
+    },
     ...(canAdvance
       ? [
           {
@@ -203,6 +220,30 @@ const AdminOrders = () => {
               }
               const next = NEXT_STATUS[row.status];
               const isBusy = updatingId === row._id;
+
+              // Pending orders get a one-click Confirm action
+              if (row.status === 'pending') {
+                return (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => changeStatus(row, 'confirmed')}
+                      disabled={isBusy}
+                      className="px-2.5 py-1.5 rounded-btn text-xs font-bold bg-primary text-white hover:bg-primary-dark disabled:opacity-50"
+                    >
+                      {isBusy ? 'Confirming…' : '✓ Confirm'}
+                    </button>
+                    <button
+                      onClick={() => changeStatus(row, 'cancelled')}
+                      disabled={isBusy}
+                      className="px-2 py-1.5 rounded-btn text-xs font-semibold text-danger border border-danger/30 hover:bg-danger-bg/10 disabled:opacity-50"
+                      title="Cancel order"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                );
+              }
+
               return (
                 <select
                   value=""

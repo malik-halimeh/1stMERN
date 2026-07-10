@@ -20,7 +20,7 @@ const CheckoutRedirect: React.FC = () => {
       return;
     }
 
-    let timer: NodeJS.Timeout;
+    let timer: ReturnType<typeof setTimeout>;
     let attempts = 0;
     const maxAttempts = 15;
 

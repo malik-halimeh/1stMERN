@@ -100,8 +100,8 @@ const AdminProducts = () => {
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  // Product CUD endpoints are inventory-manager scoped
-  const canManage = user?.role === 'inventory_manager';
+  // Product CUD endpoints are staff scoped (manager + super admin)
+  const canManage = user?.role === 'inventory_manager' || user?.role === 'super_admin';
 
   const fetchProducts = useCallback(async () => {
     try {
@@ -496,80 +496,108 @@ const AdminProducts = () => {
                 <Plus className="h-3.5 w-3.5" /> Add variant
               </button>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-3">
               {form.variants.map((v, idx) => (
                 <div
                   key={idx}
-                  className="grid grid-cols-[1fr_1fr_repeat(4,72px)_28px] gap-2 items-center bg-dashboard-section-bg/50 rounded-input p-2"
+                  className="border border-dashboard-section-bg rounded-card bg-dashboard-section-bg/30 p-3 space-y-3"
                 >
-                  <input
-                    className={inputClass}
-                    value={v.sku}
-                    onChange={(e) => setVariant(idx, { sku: e.target.value })}
-                    placeholder="SKU *"
-                  />
-                  <input
-                    className={inputClass}
-                    value={v.color}
-                    onChange={(e) => setVariant(idx, { color: e.target.value })}
-                    placeholder="Color"
-                  />
-                  <input
-                    type="number"
-                    min="0"
-                    className={inputClass}
-                    value={v.stock}
-                    onChange={(e) => setVariant(idx, { stock: e.target.value })}
-                    placeholder="Stock"
-                    title="Stock"
-                  />
-                  <input
-                    type="number"
-                    step="0.01"
-                    className={inputClass}
-                    value={v.priceDelta}
-                    onChange={(e) => setVariant(idx, { priceDelta: e.target.value })}
-                    placeholder="+$"
-                    title="Price delta ($)"
-                  />
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    className={inputClass}
-                    value={v.costPrice}
-                    onChange={(e) => setVariant(idx, { costPrice: e.target.value })}
-                    placeholder="Cost $"
-                    title="Cost price ($)"
-                  />
-                  <input
-                    type="number"
-                    min="0"
-                    className={inputClass}
-                    value={v.lowStockThreshold}
-                    onChange={(e) => setVariant(idx, { lowStockThreshold: e.target.value })}
-                    placeholder="Min"
-                    title="Low-stock threshold"
-                  />
-                  <button
-                    onClick={() =>
-                      setForm((f) => ({
-                        ...f,
-                        variants: f.variants.filter((_, i) => i !== idx),
-                      }))
-                    }
-                    disabled={form.variants.length === 1}
-                    className="text-text-muted hover:text-danger disabled:opacity-30"
-                    title="Remove variant"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-text-secondary">
+                      Variant {idx + 1}
+                    </span>
+                    <button
+                      onClick={() =>
+                        setForm((f) => ({
+                          ...f,
+                          variants: f.variants.filter((_, i) => i !== idx),
+                        }))
+                      }
+                      disabled={form.variants.length === 1}
+                      className="flex items-center gap-1 text-xs font-semibold text-text-muted hover:text-danger disabled:opacity-30"
+                      title="Remove variant"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" /> Remove
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-label text-text-secondary mb-1">SKU *</label>
+                      <input
+                        className={inputClass}
+                        value={v.sku}
+                        onChange={(e) => setVariant(idx, { sku: e.target.value })}
+                        placeholder="e.g. FRZ-500-WHT"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-label text-text-secondary mb-1">Color</label>
+                      <input
+                        className={inputClass}
+                        value={v.color}
+                        onChange={(e) => setVariant(idx, { color: e.target.value })}
+                        placeholder="e.g. White"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div>
+                      <label className="block text-label text-text-secondary mb-1">Stock</label>
+                      <input
+                        type="number"
+                        min="0"
+                        className={inputClass}
+                        value={v.stock}
+                        onChange={(e) => setVariant(idx, { stock: e.target.value })}
+                        placeholder="0"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-label text-text-secondary mb-1">
+                        Price delta ($)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        className={inputClass}
+                        value={v.priceDelta}
+                        onChange={(e) => setVariant(idx, { priceDelta: e.target.value })}
+                        placeholder="0.00"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-label text-text-secondary mb-1">
+                        Cost price ($)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        className={inputClass}
+                        value={v.costPrice}
+                        onChange={(e) => setVariant(idx, { costPrice: e.target.value })}
+                        placeholder="0.00"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-label text-text-secondary mb-1">
+                        Low-stock alert
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        className={inputClass}
+                        value={v.lowStockThreshold}
+                        onChange={(e) => setVariant(idx, { lowStockThreshold: e.target.value })}
+                        placeholder="5"
+                      />
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
-            <p className="mt-1 text-caption text-text-muted">
-              Columns: SKU, color, stock, price delta ($), cost ($), low-stock threshold.
-            </p>
           </div>
 
           {/* Images — create only (the update endpoint doesn't accept files) */}

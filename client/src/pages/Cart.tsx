@@ -7,30 +7,24 @@ import Input from '../components/ui/Input.js';
 import EmptyState from '../components/ui/EmptyState.js';
 import { useToast } from '../context/ToastContext.js';
 import { useAuth } from '../context/AuthContext.js';
+import { useShop } from '../context/ShopContext.js';
 import api from '../services/api.js';
 import { getApiErrorMessage } from '../utils/apiError.js';
 
-// Shapes returned by GET /cart (populated product + its variants)
-interface ApiCartVariant {
-  sku?: string;
-  priceDeltaCents?: number;
-  stock?: number;
-  color?: string;
-  capacity?: string;
-}
-interface ApiCartProduct {
-  _id?: string;
-  name?: string;
+// Shape returned by GET /cart — flattened, validated items
+interface ApiCartItem {
+  productId: string;
+  productName?: string;
   brand?: string;
   slug?: string;
-  thumbnail?: string;
-  basePriceCents?: number;
-  variants?: ApiCartVariant[];
-}
-interface ApiCartItem {
-  productId: ApiCartProduct | string;
+  image?: string;
   variantSku: string;
+  color?: string;
+  capacity?: string;
   quantity: number;
+  priceAtAddCents?: number;
+  currentPriceCents?: number;
+  availableStock?: number;
 }
 
 interface CartItem {
@@ -52,9 +46,15 @@ const Cart: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { addToast } = useToast();
+  const { setCartCount } = useShop();
 
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Keep the header badge in sync with whatever this page shows/mutates
+  const syncBadge = (items: CartItem[]) => {
+    setCartCount(items.reduce((sum, i) => sum + (Number(i.quantity) || 0), 0));
+  };
 
   // Coupon State
   const [couponCode, setCouponCode] = useState('');
@@ -74,28 +74,23 @@ const Cart: React.FC = () => {
         // Authenticated cart from server
         const res = await api.get('/cart');
         if (res.data?.success) {
-          const items = res.data.data.items.map((item: ApiCartItem) => {
-            const product: ApiCartProduct =
-              typeof item.productId === 'object' && item.productId ? item.productId : {};
-            const variant: ApiCartVariant =
-              product.variants?.find((v) => v.sku === item.variantSku) || {};
-            return {
-              productId:
-                product._id || (typeof item.productId === 'string' ? item.productId : ''),
-              variantSku: item.variantSku,
-              quantity: item.quantity,
-              name: product.name || 'Unknown Product',
-              brand: product.brand,
-              slug: product.slug || '',
-              thumbnail: product.thumbnail || '🧊',
-              basePriceCents: product.basePriceCents || 0,
-              priceDeltaCents: variant.priceDeltaCents || 0,
-              stock: typeof variant.stock === 'number' ? variant.stock : 0,
-              color: variant.color,
-              capacity: variant.capacity,
-            };
-          });
+          const items = res.data.data.items.map((item: ApiCartItem) => ({
+            productId: String(item.productId),
+            variantSku: item.variantSku,
+            quantity: item.quantity,
+            name: item.productName || 'Unknown Product',
+            brand: item.brand,
+            slug: item.slug || '',
+            thumbnail: item.image || '',
+            // Server sends the live variant price pre-computed
+            basePriceCents: item.currentPriceCents ?? item.priceAtAddCents ?? 0,
+            priceDeltaCents: 0,
+            stock: typeof item.availableStock === 'number' ? item.availableStock : 0,
+            color: item.color,
+            capacity: item.capacity,
+          }));
           setCartItems(items);
+          syncBadge(items);
         }
       } else {
         // Guest cart from localStorage
@@ -103,8 +98,10 @@ const Cart: React.FC = () => {
         if (stored) {
           const guestCart = JSON.parse(stored);
           setCartItems(guestCart.items || []);
+          syncBadge(guestCart.items || []);
         } else {
           setCartItems([]);
+          syncBadge([]);
         }
       }
     } catch (error) {
@@ -134,6 +131,7 @@ const Cart: React.FC = () => {
           const updatedItems = [...cartItems];
           updatedItems[index].quantity = newQty;
           setCartItems(updatedItems);
+          syncBadge(updatedItems);
           addToast('Cart updated.', 'success');
         }
       } catch (err) {
@@ -144,6 +142,7 @@ const Cart: React.FC = () => {
       const updatedItems = [...cartItems];
       updatedItems[index].quantity = newQty;
       setCartItems(updatedItems);
+      syncBadge(updatedItems);
       localStorage.setItem('guest_cart', JSON.stringify({ items: updatedItems }));
       addToast('Cart updated.', 'success');
     }
@@ -160,6 +159,7 @@ const Cart: React.FC = () => {
         if (res.data?.success) {
           const updatedItems = cartItems.filter((_, idx) => idx !== index);
           setCartItems(updatedItems);
+          syncBadge(updatedItems);
           addToast('Item removed from cart.', 'success');
         }
       } catch {
@@ -169,6 +169,7 @@ const Cart: React.FC = () => {
       // Guest cart remove
       const updatedItems = cartItems.filter((_, idx) => idx !== index);
       setCartItems(updatedItems);
+      syncBadge(updatedItems);
       localStorage.setItem('guest_cart', JSON.stringify({ items: updatedItems }));
       addToast('Item removed from cart.', 'success');
     }
@@ -269,7 +270,7 @@ const Cart: React.FC = () => {
   };
 
   return (
-    <StorefrontLayout breadcrumbs={[{ label: 'Home', path: '/' }, { label: 'Shopping Cart' }]}>
+    <StorefrontLayout breadcrumbs={[{ label: 'Home', href: '/' }, { label: 'Shopping Cart' }]}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 font-sans">
         <h1 className="text-3xl font-bold text-text-primary text-left mb-8">Shopping Cart</h1>
 
@@ -309,8 +310,12 @@ const Cart: React.FC = () => {
                   >
                     {/* Item Details */}
                     <div className="flex items-center gap-4 flex-grow text-left">
-                      <div className="h-20 w-20 flex-shrink-0 bg-dashboard-section-bg rounded-lg flex items-center justify-center text-3xl border border-dashboard-section-bg/30">
-                        {item.thumbnail || '🧊'}
+                      <div className="h-20 w-20 flex-shrink-0 bg-dashboard-section-bg rounded-lg flex items-center justify-center text-3xl border border-dashboard-section-bg/30 overflow-hidden">
+                        {item.thumbnail && item.thumbnail.startsWith('http') ? (
+                          <img src={item.thumbnail} alt={item.name} className="h-full w-full object-cover" />
+                        ) : (
+                          item.thumbnail || '🧊'
+                        )}
                       </div>
                       <div>
                         {item.brand && (
@@ -451,7 +456,7 @@ const Cart: React.FC = () => {
                         <Button
                           type="submit"
                           variant="secondary"
-                          loading={isApplyingCoupon}
+                          isLoading={isApplyingCoupon}
                           className="px-4 text-xs shrink-0"
                         >
                           Apply

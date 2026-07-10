@@ -28,12 +28,12 @@ router.get('/:slug', getProductBySlug);
 router.post(
   '/',
   authenticate,
-  authorize('inventory_manager'),
+  authorize('inventory_manager', 'super_admin'),
   upload.array('images', 5) as any, // Accept up to 5 uploaded images
   createProduct
 );
 
-router.patch('/:id', authenticate, authorize('inventory_manager'), updateProduct);
-router.delete('/:id', authenticate, authorize('inventory_manager'), deleteProduct);
+router.patch('/:id', authenticate, authorize('inventory_manager', 'super_admin'), updateProduct);
+router.delete('/:id', authenticate, authorize('inventory_manager', 'super_admin'), deleteProduct);
 
 export default router;

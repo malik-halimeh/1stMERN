@@ -6,8 +6,8 @@ const router = Router();
 
 router.use(authenticate);
 
-// Super admins get read visibility; resolving stays manager-scoped
+// Inventory managers and super admins have equal access
 router.get('/', authorize('inventory_manager', 'super_admin'), getLowStockAlerts);
-router.patch('/:id/resolve', authorize('inventory_manager'), resolveLowStockAlert);
+router.patch('/:id/resolve', authorize('inventory_manager', 'super_admin'), resolveLowStockAlert);
 
 export default router;

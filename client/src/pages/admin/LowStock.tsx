@@ -39,7 +39,7 @@ const AdminLowStock = () => {
     );
   }, [alerts, search]);
 
-  const canResolve = user?.role === 'inventory_manager';
+  const canResolve = user?.role === 'inventory_manager' || user?.role === 'super_admin';
 
   const fetchAlerts = useCallback(async () => {
     try {

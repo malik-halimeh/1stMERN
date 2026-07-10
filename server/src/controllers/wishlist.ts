@@ -18,9 +18,14 @@ export const getWishlist = async (req: Request, res: Response, next: NextFunctio
       wishlist = await Wishlist.create({ userId, productIds: [] });
     }
 
+    // Clients consume the populated products under `items`
     res.status(200).json({
       success: true,
-      data: wishlist,
+      data: {
+        _id: wishlist._id,
+        userId: wishlist.userId,
+        items: wishlist.productIds,
+      },
     });
   } catch (error) {
     next(error);
@@ -55,14 +60,16 @@ export const addToWishlist = async (req: Request, res: Response, next: NextFunct
 
     const prodId = new mongoose.Types.ObjectId(productId);
 
-    // Prevent duplicate entries
-    if (!wishlist.productIds.some((id) => id.toString() === productId)) {
+    // Prevent duplicate entries — and tell the client when it was a duplicate
+    const alreadyInWishlist = wishlist.productIds.some((id) => id.toString() === productId);
+    if (!alreadyInWishlist) {
       wishlist.productIds.push(prodId);
       await wishlist.save();
     }
 
     res.status(200).json({
       success: true,
+      alreadyInWishlist,
       data: wishlist,
     });
   } catch (error) {

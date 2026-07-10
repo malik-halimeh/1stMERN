@@ -24,6 +24,13 @@ export interface IRefund {
   stripeRefundId?: string;
 }
 
+// Customer feedback about the order experience (delivery, service, etc.)
+export interface IOrderFeedback {
+  rating: number;
+  text: string;
+  createdAt: Date;
+}
+
 export interface IOrder extends Document {
   orderNumber: string;
   userId: mongoose.Types.ObjectId;
@@ -44,6 +51,7 @@ export interface IOrder extends Document {
   paymentIntentId?: string;
   paymentStatus: 'pending' | 'succeeded' | 'failed';
   refund?: IRefund | null;
+  feedback?: IOrderFeedback | null;
   createdAt: Date;
   updatedAt: Date;
   deliveredAt?: Date;
@@ -184,6 +192,17 @@ const OrderSchema = new Schema<IOrder>(
     },
     refund: {
       type: RefundSchema,
+      default: null,
+    },
+    feedback: {
+      type: new Schema<IOrderFeedback>(
+        {
+          rating: { type: Number, required: true, min: 1, max: 5 },
+          text: { type: String, required: true, trim: true, maxlength: 2000 },
+          createdAt: { type: Date, default: Date.now, required: true },
+        },
+        { _id: false }
+      ),
       default: null,
     },
     deliveredAt: { type: Date },

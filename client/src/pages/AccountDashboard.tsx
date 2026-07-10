@@ -1,16 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { ClipboardList, MapPin, Heart, User, Trash, Plus, ShieldCheck, Mail, Save, ExternalLink, LogOut } from 'lucide-react';
+import { ClipboardList, MapPin, Heart, User, Trash, Plus, Mail, Save, ExternalLink, LogOut } from 'lucide-react';
 import StorefrontLayout from '../components/layout/StorefrontLayout.js';
 import Button from '../components/ui/Button.js';
 import Input from '../components/ui/Input.js';
 import EmptyState from '../components/ui/EmptyState.js';
 import Skeleton from '../components/ui/Skeleton.js';
-import Badge from '../components/ui/Badge.js';
 import { useToast } from '../context/ToastContext.js';
 import { useAuth } from '../context/AuthContext.js';
+import { useShop } from '../context/ShopContext.js';
 import api from '../services/api.js';
-import { getApiErrorMessage } from '../utils/apiError.js';
 
 type TabType = 'orders' | 'addresses' | 'wishlist' | 'details';
 
@@ -47,6 +46,7 @@ const AccountDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { user, isAuthenticated, setUser, logout } = useAuth();
   const { addToast } = useToast();
+  const { addItemToCart, removeWishlistId } = useShop();
 
   const handleLogout = async () => {
     try { await logout(); } catch { /* swallowed */ }
@@ -89,11 +89,11 @@ const AccountDashboard: React.FC = () => {
     }
   }, [user]);
 
-  // Fetch orders
+  // Fetch orders — scope=mine so staff accounts also see only their OWN orders here
   const fetchOrders = async () => {
     try {
       setOrdersLoading(true);
-      const res = await api.get('/orders');
+      const res = await api.get('/orders?scope=mine');
       if (res.data?.success) {
         setOrders(res.data.data);
       }
@@ -138,7 +138,7 @@ const AccountDashboard: React.FC = () => {
       setIsSavingProfile(true);
       const res = await api.patch('/auth/profile', { name: profileName.trim() });
       if (res.data?.success) {
-        setUser({ ...user, name: res.data.data.name });
+        setUser((prev) => (prev ? { ...prev, name: res.data.data.name } : prev));
         addToast('Account profile details updated.', 'success');
       }
     } catch {
@@ -172,7 +172,7 @@ const AccountDashboard: React.FC = () => {
 
       const res = await api.patch('/auth/profile', { addresses: updatedAddresses });
       if (res.data?.success) {
-        setUser({ ...user, addresses: res.data.data.addresses });
+        setUser((prev) => (prev ? { ...prev, addresses: res.data.data.addresses } : prev));
         addToast('New address saved.', 'success');
         
         // Clear fields
@@ -197,7 +197,7 @@ const AccountDashboard: React.FC = () => {
     try {
       const res = await api.patch('/auth/profile', { addresses: updated });
       if (res.data?.success) {
-        setUser({ ...user, addresses: res.data.data.addresses });
+        setUser((prev) => (prev ? { ...prev, addresses: res.data.data.addresses } : prev));
         addToast('Address removed successfully.', 'success');
       }
     } catch {
@@ -205,12 +205,13 @@ const AccountDashboard: React.FC = () => {
     }
   };
 
-  // Remove wishlist item
+  // Remove wishlist item — also syncs the shared wishlist badge
   const handleRemoveWishlistItem = async (productId: string) => {
     try {
       const res = await api.delete(`/wishlist/${productId}`);
       if (res.data?.success) {
         setWishlistItems(wishlistItems.filter((item) => item._id !== productId));
+        removeWishlistId(productId);
         addToast('Wishlist item removed.', 'success');
       }
     } catch (err) {
@@ -218,15 +219,13 @@ const AccountDashboard: React.FC = () => {
     }
   };
 
-  // Move wishlist item to cart
+  // Move wishlist item to cart — updates the shared cart badge
   const handleMoveToCart = async (productId: string, variantSku: string) => {
     try {
-      const res = await api.post('/cart/items', { productId, variantSku, quantity: 1 });
-      if (res.data?.success) {
-        addToast('Product moved to shopping cart.', 'success');
-        // Delete from wishlist
-        await handleRemoveWishlistItem(productId);
-      }
+      await addItemToCart(productId, variantSku, 1);
+      addToast('Product moved to shopping cart.', 'success');
+      // Delete from wishlist
+      await handleRemoveWishlistItem(productId);
     } catch (err: any) {
       const msg = err.response?.data?.error?.message || 'Cannot add variant to cart. Out of stock.';
       addToast(msg, 'error');
@@ -256,7 +255,7 @@ const AccountDashboard: React.FC = () => {
   };
 
   return (
-    <StorefrontLayout breadcrumbs={[{ label: 'Home', path: '/' }, { label: 'Account Dashboard' }]}>
+    <StorefrontLayout breadcrumbs={[{ label: 'Home', href: '/' }, { label: 'Account Dashboard' }]}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 font-sans">
         <h1 className="text-3xl font-bold text-text-primary text-left mb-8">Account Management</h1>
 
@@ -441,7 +440,7 @@ const AccountDashboard: React.FC = () => {
                       <Button
                         type="submit"
                         variant="primary"
-                        loading={isSavingAddress}
+                        isLoading={isSavingAddress}
                         className="py-1 px-4 text-xs font-bold"
                       >
                         Save Address
@@ -517,12 +516,17 @@ const AccountDashboard: React.FC = () => {
                   <div className="grid grid-cols-2 gap-4">
                     {wishlistItems.map((item: any) => {
                       const firstVariant = item.variants?.[0] || {};
-                      const itemPrice = item.basePriceCents + firstVariant.priceDeltaCents;
+                      const itemPrice = (item.basePriceCents || 0) + (firstVariant.priceDeltaCents || 0);
+                      const imageUrl = item.images?.[0]?.url || item.thumbnail;
                       return (
                         <div key={item._id} className="p-4 border border-dashboard-section-bg/50 rounded-card bg-surface flex flex-col justify-between hover:shadow-level1 transition-all">
                           <div className="flex gap-3">
-                            <div className="h-16 w-16 bg-dashboard-section-bg rounded flex items-center justify-center text-2xl">
-                              {item.thumbnail || '🧊'}
+                            <div className="h-16 w-16 bg-dashboard-section-bg rounded flex items-center justify-center text-2xl overflow-hidden">
+                              {imageUrl && String(imageUrl).startsWith('http') ? (
+                                <img src={imageUrl} alt={item.name} className="h-full w-full object-cover" />
+                              ) : (
+                                imageUrl || '🧊'
+                              )}
                             </div>
                             <div className="text-left flex-grow">
                               {item.brand && <span className="text-[9px] uppercase font-bold text-text-muted">{item.brand}</span>}
@@ -582,7 +586,7 @@ const AccountDashboard: React.FC = () => {
                   <Button
                     type="submit"
                     variant="primary"
-                    loading={isSavingProfile}
+                    isLoading={isSavingProfile}
                     className="w-full py-2.5 font-bold flex justify-center text-xs"
                     icon={<Save className="h-4 w-4" />}
                   >

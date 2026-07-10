@@ -23,8 +23,8 @@ interface Category {
 const Categories = () => {
 
     const { user } = useAuth();
-    // Category mutations are inventory-manager scoped server-side
-    const canManage = user?.role === "inventory_manager";
+    // Category mutations are staff scoped server-side (manager + super admin)
+    const canManage = user?.role === "inventory_manager" || user?.role === "super_admin";
 
     const [categories, setCategories] = useState<Category[]>([]);
     const [loading, setLoading] = useState(true);

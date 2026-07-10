@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import StorefrontLayout from '../components/layout/StorefrontLayout.js';
 import Skeleton from '../components/ui/Skeleton.js';
@@ -9,7 +9,7 @@ import ProductCard from '../components/ui/ProductCard.js';
 import type { ProductDoc, ProductVariant } from '../components/ui/ProductCard.js';
 import { useToast } from '../context/ToastContext.js';
 import { useAuth } from '../context/AuthContext.js';
-import { addToGuestWishlist } from './Wishlist.js';
+import { useShop } from '../context/ShopContext.js';
 import api from '../services/api.js';
 import { Star, ShoppingCart, Heart, Plus, Minus, MessageSquare, ShieldCheck } from 'lucide-react';
 
@@ -57,6 +57,7 @@ const ProductDetail: React.FC = () => {
   const navigate = useNavigate();
   const { addToast } = useToast();
   const { user } = useAuth();
+  const { addItemToCart, addItemToWishlist, isInWishlist } = useShop();
 
   const [product, setProduct] = useState<ProductDoc | null>(null);
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null);
@@ -196,18 +197,12 @@ const ProductDetail: React.FC = () => {
     }
   };
 
-  // Add to Cart handler
+  // Add to Cart handler — updates the shared header badge count
   const handleAddToCart = async () => {
     if (!product || !selectedVariant) return;
     try {
-      const res = await api.post('/cart/items', {
-        productId: product._id,
-        variantSku: selectedVariant.sku,
-        quantity,
-      });
-      if (res.data?.success) {
-        addToast(`Added ${quantity} item(s) to your cart!`, 'success');
-      }
+      await addItemToCart(product._id, selectedVariant.sku, quantity);
+      addToast(`Added ${quantity} item(s) to your cart!`, 'success');
     } catch (err: any) {
       const msg = err.response?.data?.error?.message || 'Please log in to add items to your cart.';
       addToast(msg, err.response?.status === 401 ? 'warning' : 'error');
@@ -217,22 +212,19 @@ const ProductDetail: React.FC = () => {
     }
   };
 
-  // Add to Wishlist handler — guest: localStorage; auth: API
-  const handleAddToWishlist = async () => {
-    if (!product) return;
-    if (!user) {
-      const added = addToGuestWishlist(product._id);
-      if (added) {
-        addToast('Item saved to your local wishlist! Sign in to sync across devices.', 'success');
-      } else {
-        addToast('Item is already in your wishlist.', 'info');
-      }
-      return;
-    }
+  // Add to Wishlist handler — duplicate-aware. Accepts an explicit id so the
+  // related/recently-viewed carousels wishlist THEIR product, not this page's.
+  const handleAddToWishlist = async (targetProductId?: string) => {
+    const productId = targetProductId || product?._id;
+    if (!productId) return;
     try {
-      const res = await api.post(`/wishlist/${product._id}`);
-      if (res.data?.success) {
+      const result = await addItemToWishlist(productId);
+      if (result === 'exists') {
+        addToast('Item is already in your wishlist.', 'info');
+      } else if (user) {
         addToast('Added item to your wishlist!', 'success');
+      } else {
+        addToast('Item saved to your local wishlist! Sign in to sync across devices.', 'success');
       }
     } catch (err: any) {
       const msg = err.response?.data?.error?.message || 'Failed to update wishlist.';
@@ -471,10 +463,16 @@ const ProductDetail: React.FC = () => {
 
               <Button
                 variant="secondary"
-                onClick={handleAddToWishlist}
-                icon={<Heart className="h-5 w-5" />}
+                onClick={() => handleAddToWishlist()}
+                icon={
+                  <Heart
+                    className={`h-5 w-5 transition-colors ${
+                      product && isInWishlist(product._id) ? 'fill-danger text-danger' : ''
+                    }`}
+                  />
+                }
                 className="p-3 border border-dashboard-section-bg"
-                title="Add to Wishlist"
+                title={product && isInWishlist(product._id) ? 'Already in wishlist' : 'Add to Wishlist'}
               />
             </div>
           </div>
@@ -666,6 +664,7 @@ const ProductDetail: React.FC = () => {
                   product={prod}
                   onAddToCart={() => navigate(`/products/${prod.slug}`)}
                   onAddToWishlist={handleAddToWishlist}
+                  isInWishlist={isInWishlist(prod._id)}
                   onQuickView={(p) => navigate(`/products/${p.slug}`)}
                 />
               ))}
@@ -684,6 +683,7 @@ const ProductDetail: React.FC = () => {
                   product={prod}
                   onAddToCart={() => navigate(`/products/${prod.slug}`)}
                   onAddToWishlist={handleAddToWishlist}
+                  isInWishlist={isInWishlist(prod._id)}
                   onQuickView={(p) => navigate(`/products/${p.slug}`)}
                 />
               ))}

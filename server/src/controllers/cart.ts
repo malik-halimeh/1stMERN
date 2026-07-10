@@ -49,6 +49,7 @@ export const getCart = async (req: Request, res: Response, next: NextFunction) =
         productId: item.productId,
         productName: product.name,
         brand: product.brand,
+        slug: product.slug,
         image: product.images[0]?.url || '',
         variantSku: item.variantSku,
         color: variant.color,

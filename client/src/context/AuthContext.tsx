@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import api, { setAccessToken, refreshAccessToken } from '../services/api.js';
 
 export interface IUser {
@@ -15,7 +15,10 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (name: string, email: string, password: string) => Promise<void>;
+  register: (name: string, email: string, password: string) => Promise<{ requiresVerification: boolean; email: string }>;
+  verifyEmail: (email: string, code: string) => Promise<void>;
+  resendVerification: (email: string) => Promise<void>;
+  loginWithGoogle: (credential: string) => Promise<void>;
   logout: () => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
 }
@@ -42,18 +45,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<IUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Bumped on every explicit auth action (login/register/logout). A silent
+  // refresh that started before the bump must not overwrite the newer state —
+  // otherwise a slow mount-time refresh failing AFTER a successful login
+  // clears the fresh session and forces the user to log in a second time.
+  const sessionEpochRef = useRef(0);
+
   // 1. Silent Refresh on App Mount
   const silentRefresh = useCallback(async () => {
+    const epochAtStart = sessionEpochRef.current;
+    const isStale = () => sessionEpochRef.current !== epochAtStart;
     try {
       // Single-flight: shares any in-flight refresh (e.g. StrictMode's
       // double-mount or an interceptor-triggered refresh) instead of firing
       // a second rotation that the server would flag as token reuse.
       const token = await refreshAccessToken();
-      if (token) {
+      if (token && !isStale()) {
         const decoded = decodeJwt(token);
         if (decoded) {
           try {
             const profileRes = await api.get('/auth/profile');
+            if (isStale()) return;
             if (profileRes.data?.success) {
               const fullUser = profileRes.data.data;
               setUser({
@@ -73,20 +85,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               });
             }
           } catch {
-            setUser({
-              id: decoded.userId,
-              role: decoded.role as IUser['role'],
-              name: '',
-              email: '',
-              addresses: [],
-            });
+            if (!isStale()) {
+              setUser({
+                id: decoded.userId,
+                role: decoded.role as IUser['role'],
+                name: '',
+                email: '',
+                addresses: [],
+              });
+            }
           }
         }
       }
     } catch (error) {
       console.log('No active session found on app mount (silent refresh bypassed).');
-      setUser(null);
-      setAccessToken(null);
+      // Only clear state when no login/register beat this refresh to it
+      if (!isStale()) {
+        setUser(null);
+        setAccessToken(null);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -96,32 +113,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     silentRefresh();
   }, [silentRefresh]);
 
-  // 2. Login Flow
-  const login = async (email: string, password: string) => {
-    const response = await api.post('/auth/login', { email, password });
-    const { accessToken, user: userData } = response.data.data;
-    setAccessToken(accessToken);
+  // Apply a fresh session returned by login / verify-email / google
+  const applySession = (data: { accessToken: string; user: any }) => {
+    sessionEpochRef.current += 1; // invalidate any in-flight silent refresh
+    setAccessToken(data.accessToken);
     setUser({
-      id: userData.id,
-      name: userData.name,
-      email: userData.email,
-      role: userData.role,
-      addresses: userData.addresses || [],
+      id: data.user.id,
+      name: data.user.name,
+      email: data.user.email,
+      role: data.user.role,
+      addresses: data.user.addresses || [],
     });
   };
 
-  // 3. Register Flow
+  // 2. Login Flow
+  const login = async (email: string, password: string) => {
+    const response = await api.post('/auth/login', { email, password });
+    applySession(response.data.data);
+  };
+
+  // 3. Register Flow — creates a PENDING account; the emailed code must be
+  // confirmed via verifyEmail() before a session is opened.
   const register = async (name: string, email: string, password: string) => {
     const response = await api.post('/auth/register', { name, email, password });
-    const { accessToken, user: userData } = response.data.data;
-    setAccessToken(accessToken);
-    setUser({
-      id: userData.id,
-      name: userData.name,
-      email: userData.email,
-      role: userData.role,
-      addresses: userData.addresses || [],
-    });
+    return {
+      requiresVerification: !!response.data.data.requiresVerification,
+      email: response.data.data.email || email,
+    };
+  };
+
+  // 3b. Confirm the signup verification code → opens the session
+  const verifyEmail = async (email: string, code: string) => {
+    const response = await api.post('/auth/verify-email', { email, code });
+    applySession(response.data.data);
+  };
+
+  // 3c. Request a fresh verification code
+  const resendVerification = async (email: string) => {
+    await api.post('/auth/resend-verification', { email });
+  };
+
+  // 3d. Google sign-in (GSI ID token) → opens the session
+  const loginWithGoogle = async (credential: string) => {
+    const response = await api.post('/auth/google', { credential });
+    applySession(response.data.data);
   };
 
   // 4. Logout Flow
@@ -131,6 +166,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (err) {
       console.error('API logout call failed:', err);
     } finally {
+      sessionEpochRef.current += 1;
       setUser(null);
       setAccessToken(null);
     }
@@ -150,6 +186,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isLoading,
         login,
         register,
+        verifyEmail,
+        resendVerification,
+        loginWithGoogle,
         logout,
         forgotPassword,
       }}

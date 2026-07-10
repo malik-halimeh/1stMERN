@@ -9,7 +9,7 @@ import Input from '../components/ui/Input.js';
 import EmptyState from '../components/ui/EmptyState.js';
 import { useToast } from '../context/ToastContext.js';
 import { useAuth } from '../context/AuthContext.js';
-import { addToGuestWishlist } from './Wishlist.js';
+import { useShop } from '../context/ShopContext.js';
 import axios from 'axios';
 import api from '../services/api.js';
 import { getApiErrorMessage } from '../utils/apiError.js';
@@ -34,6 +34,7 @@ const ProductList: React.FC = () => {
   const navigate = useNavigate();
   const { addToast } = useToast();
   const { user } = useAuth();
+  const { addItemToCart, addItemToWishlist, isInWishlist } = useShop();
 
   const [products, setProducts] = useState<ProductDoc[]>([]);
   const [categories, setCategories] = useState<CategoryDoc[]>([]);
@@ -148,13 +149,11 @@ const ProductList: React.FC = () => {
     setSearchParams(new URLSearchParams());
   };
 
-  // Add to Cart handler
+  // Add to Cart handler — updates the shared header badge count
   const handleAddToCart = async (productId: string, variantSku: string) => {
     try {
-      const res = await api.post('/cart/items', { productId, variantSku, quantity: 1 });
-      if (res.data?.success) {
-        addToast('Item added to your shopping cart!', 'success');
-      }
+      await addItemToCart(productId, variantSku, 1);
+      addToast('Item added to your shopping cart!', 'success');
     } catch (err) {
       const status = axios.isAxiosError(err) ? err.response?.status : undefined;
       const msg = getApiErrorMessage(err, 'Please log in to add items to your cart.');
@@ -165,21 +164,16 @@ const ProductList: React.FC = () => {
     }
   };
 
-  // Add to Wishlist handler — guest: localStorage; auth: API
+  // Add to Wishlist handler — duplicate-aware (guest + auth)
   const handleAddToWishlist = async (productId: string) => {
-    if (!user) {
-      const added = addToGuestWishlist(productId);
-      if (added) {
-        addToast('Item saved to your local wishlist! Sign in to sync across devices.', 'success');
-      } else {
-        addToast('Item is already in your wishlist.', 'info');
-      }
-      return;
-    }
     try {
-      const res = await api.post(`/wishlist/${productId}`);
-      if (res.data?.success) {
+      const result = await addItemToWishlist(productId);
+      if (result === 'exists') {
+        addToast('Item is already in your wishlist.', 'info');
+      } else if (user) {
         addToast('Item added to your wishlist!', 'success');
+      } else {
+        addToast('Item saved to your local wishlist! Sign in to sync across devices.', 'success');
       }
     } catch (err) {
       addToast(getApiErrorMessage(err, 'Failed to update wishlist.'), 'error');
@@ -362,6 +356,7 @@ const ProductList: React.FC = () => {
                   product={prod}
                   onAddToCart={handleAddToCart}
                   onAddToWishlist={handleAddToWishlist}
+                  isInWishlist={isInWishlist(prod._id)}
                   onQuickView={(p) => navigate(`/products/${p.slug}`)}
                 />
               ))}

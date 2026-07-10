@@ -1,16 +1,30 @@
 import { Router } from 'express';
-import { register, login, refresh, logout, forgotPassword, updateProfile, getProfile } from '../controllers/auth.js';
+import {
+  register,
+  verifyEmail,
+  resendVerification,
+  googleAuth,
+  login,
+  refresh,
+  logout,
+  forgotPassword,
+  updateProfile,
+  getProfile,
+} from '../controllers/auth.js';
 import { authRateLimiter } from '../middleware/rateLimiter.js';
 import { authenticate } from '../middleware/auth.js';
 
 const router = Router();
 
 // Rate limiting applied ONLY to the endpoints where repeated automated attempts
-// are a security concern: login, register, and forgot-password.
+// are a security concern: login, register, verification, and forgot-password.
 // Critically, /refresh and /logout are NOT rate-limited here — they fire
 // automatically (silent refresh on mount, 401 interceptor retries) and must
 // never count against the user's login-attempt budget.
 router.post('/register', authRateLimiter as any, register);
+router.post('/verify-email', authRateLimiter as any, verifyEmail);
+router.post('/resend-verification', authRateLimiter as any, resendVerification);
+router.post('/google', authRateLimiter as any, googleAuth);
 router.post('/login', authRateLimiter as any, login);
 router.post('/forgot-password', authRateLimiter as any, forgotPassword);
 

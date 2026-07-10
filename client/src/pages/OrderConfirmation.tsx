@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
-import { CheckCircle2, Calendar, ShoppingBag, ArrowRight, Truck } from 'lucide-react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { CheckCircle2, ShoppingBag, ArrowRight, Truck } from 'lucide-react';
 import StorefrontLayout from '../components/layout/StorefrontLayout.js';
 import Button from '../components/ui/Button.js';
 import Skeleton from '../components/ui/Skeleton.js';
 import { useToast } from '../context/ToastContext.js';
+import { useShop } from '../context/ShopContext.js';
 import api from '../services/api.js';
 
 interface OrderItem {
@@ -36,6 +37,7 @@ const OrderConfirmation: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { addToast } = useToast();
+  const { refreshShopData } = useShop();
 
   const [order, setOrder] = useState<OrderData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -57,6 +59,8 @@ const OrderConfirmation: React.FC = () => {
     };
 
     if (id) fetchOrderDetails();
+    // Checkout emptied the server cart — resync the header badge
+    refreshShopData();
   }, [id]);
 
   // Static delivery window calculation (e.g. orderDate + 4 business days)
@@ -71,7 +75,7 @@ const OrderConfirmation: React.FC = () => {
   };
 
   return (
-    <StorefrontLayout breadcrumbs={[{ label: 'Home', path: '/' }, { label: 'Order Confirmation' }]}>
+    <StorefrontLayout breadcrumbs={[{ label: 'Home', href: '/' }, { label: 'Order Confirmation' }]}>
       <div className="max-w-3xl mx-auto px-4 py-10 font-sans">
         {isLoading ? (
           <div className="bg-surface border border-dashboard-section-bg/50 rounded-card p-6 shadow-level1 space-y-4">
