@@ -8,6 +8,7 @@ import Skeleton from '../components/ui/Skeleton.js';
 import Modal from '../components/ui/Modal.js';
 import { useToast } from '../context/ToastContext.js';
 import api from '../services/api.js';
+import { getApiErrorMessage } from '../utils/apiError.js';
 
 interface OrderItem {
   productId: string;
@@ -104,9 +105,8 @@ const OrderDetail: React.FC = () => {
         addToast('Review submitted successfully!', 'success');
         setSelectedProductReview(null);
       }
-    } catch (err: any) {
-      const msg = err.response?.data?.error?.message || 'Failed to submit review. Purchases validation required.';
-      addToast(msg, 'error');
+    } catch (err) {
+      addToast(getApiErrorMessage(err, 'Failed to submit review. Purchases validation required.'), 'error');
     } finally {
       setIsSubmittingReview(false);
     }

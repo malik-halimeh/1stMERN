@@ -6,6 +6,7 @@ import Product from '../models/Product.js';
 import AuditLog from '../models/AuditLog.js';
 import User from '../models/User.js';
 import { AppError } from '../utils/errors.js';
+import { escapeRegex } from '../utils/escapeRegex.js';
 
 // Helper to recalculate ratings/reviews count under transaction session
 const recalculateProductRatings = async (
@@ -330,7 +331,14 @@ export const getAllReviews = async (req: Request, res: Response, next: NextFunct
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 50));
     const skip = (page - 1) * limit;
 
-    const filter = { isRemoved: false };
+    const filter: Record<string, unknown> = { isRemoved: false };
+
+    // Search review text (partial, case-insensitive)
+    const q = req.query.q as string | undefined;
+    if (q?.trim()) {
+      filter.text = { $regex: escapeRegex(q), $options: 'i' };
+    }
+
     const total = await Review.countDocuments(filter);
     const reviews = await Review.find(filter)
       .populate('productId', 'name slug')

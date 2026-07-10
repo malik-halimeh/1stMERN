@@ -2,8 +2,11 @@ import { useCallback, useEffect, useState } from "react";
 import api from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
+import axios from "axios";
 import Modal from "../../components/ui/Modal";
 import Button from "../../components/ui/Button";
+import SearchBox from "../../components/ui/SearchBox";
+import { getApiErrorMessage } from "../../utils/apiError";
 
 interface Address {
     label?: string;
@@ -51,6 +54,10 @@ const Users = () => {
 
     const [users, setUsers] = useState<User[]>([]);
     const [loading, setLoading] = useState(true);
+    const [page, setPage] = useState(1);
+    const [meta, setMeta] = useState({ total: 0, pages: 1 });
+    const [searchInput, setSearchInput] = useState(""); // what's typed
+    const [q, setQ] = useState(""); // applied on Enter
 
     const [modalOpen, setModalOpen] = useState(false);
     const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -60,15 +67,31 @@ const Users = () => {
 
     const fetchUsers = useCallback(async () => {
         try {
-            const res = await api.get("/users?limit=100");
+            const params = new URLSearchParams({ page: String(page), limit: "20" });
+            if (q) params.set("q", q); // name/email search on the server
+            const res = await api.get(`/users?${params.toString()}`);
+            // Deleting the last row of the last page leaves us past the end — step back
+            if (res.data.data.length === 0 && page > 1) {
+                setPage(page - 1);
+                return;
+            }
             setUsers(res.data.data);
+            setMeta({
+                total: res.data.meta?.total ?? res.data.data.length,
+                pages: res.data.meta?.pages ?? 1,
+            });
         } catch (err) {
             console.error("Failed to fetch users:", err);
             addToast("Failed to load users.", "error");
         } finally {
             setLoading(false);
         }
-    }, [addToast]);
+    }, [page, q, addToast]);
+
+    const applySearch = () => {
+        setQ(searchInput.trim());
+        setPage(1);
+    };
 
     useEffect(() => {
         fetchUsers();
@@ -101,8 +124,8 @@ const Users = () => {
             await api.patch(`/users/${u._id}/role`, { role });
             addToast(`${u.name} is now ${role}.`, "success");
             await fetchUsers();
-        } catch (err: any) {
-            addToast(err.response?.data?.message || "Failed to change role.", "error");
+        } catch (err) {
+            addToast(getApiErrorMessage(err, "Failed to change role."), "error");
         }
     };
 
@@ -113,8 +136,8 @@ const Users = () => {
             await api.patch(`/users/${u._id}/status`, { isActive: next });
             addToast(`${u.name} ${next ? "activated" : "deactivated"}.`, "success");
             await fetchUsers();
-        } catch (err: any) {
-            addToast(err.response?.data?.message || "Failed to change status.", "error");
+        } catch (err) {
+            addToast(getApiErrorMessage(err, "Failed to change status."), "error");
         }
     };
 
@@ -135,12 +158,15 @@ const Users = () => {
             }
             setModalOpen(false);
             await fetchUsers();
-        } catch (err: any) {
-            const data = err.response?.data;
-            const detail = data?.details?.[0];
+        } catch (err) {
+            // The create endpoint returns field-level validation details
+            const detail = axios.isAxiosError(err)
+                ? (err.response?.data as { details?: { field: string; message: string }[] })
+                      ?.details?.[0]
+                : undefined;
             const message = detail
                 ? `${detail.field}: ${detail.message}`
-                : data?.message || data?.error?.message || "Failed to save user.";
+                : getApiErrorMessage(err, "Failed to save user.");
             addToast(message, "error");
         } finally {
             setSaving(false);
@@ -156,12 +182,8 @@ const Users = () => {
             await api.delete(`/users/${u._id}`);
             addToast(`User ${u.name} deleted.`, "success");
             await fetchUsers();
-        } catch (err: any) {
-            const message =
-                err.response?.data?.message ||
-                err.response?.data?.error?.message ||
-                "Failed to delete user.";
-            addToast(message, "error");
+        } catch (err) {
+            addToast(getApiErrorMessage(err, "Failed to delete user."), "error");
         } finally {
             setDeletingId(null);
         }
@@ -182,11 +204,19 @@ const Users = () => {
                 </Button>
             </div>
 
+            {/* Search by name/email (Enter to search, clear + Enter to reset) */}
+            <SearchBox
+                value={searchInput}
+                onChange={setSearchInput}
+                onSubmit={applySearch}
+                placeholder="Search name or email…"
+            />
+
             {/* Table Card */}
             <div className="rounded-xl border border-dashboard-section-bg bg-surface shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between px-6 py-4 border-b border-dashboard-section-bg">
                     <h2 className="font-medium text-text-primary">All Users</h2>
-                    <span className="text-sm text-text-secondary">{users.length} accounts</span>
+                    <span className="text-sm text-text-secondary">{meta.total} accounts</span>
                 </div>
 
                 {loading ? (
@@ -213,7 +243,7 @@ const Users = () => {
                                 {users.length === 0 ? (
                                     <tr>
                                         <td colSpan={7} className="px-6 py-12 text-center text-text-secondary">
-                                            No users found.
+                                            {q ? `No users match "${q}".` : "No users found."}
                                         </td>
                                     </tr>
                                 ) : (
@@ -300,6 +330,30 @@ const Users = () => {
                                 )}
                             </tbody>
                         </table>
+
+                        {/* Server-side pagination footer */}
+                        <div className="flex items-center justify-between px-6 py-4 border-t border-dashboard-section-bg select-none">
+                            <span className="text-sm text-text-secondary">
+                                Showing {users.length} of {meta.total} entries · page {page} of{" "}
+                                {meta.pages}
+                            </span>
+                            <div className="flex gap-2">
+                                <Button
+                                    variant="secondary"
+                                    disabled={page === 1}
+                                    onClick={() => setPage((p) => Math.max(p - 1, 1))}
+                                >
+                                    Previous
+                                </Button>
+                                <Button
+                                    variant="secondary"
+                                    disabled={page >= meta.pages}
+                                    onClick={() => setPage((p) => Math.min(p + 1, meta.pages))}
+                                >
+                                    Next
+                                </Button>
+                            </div>
+                        </div>
                     </div>
                 )}
             </div>

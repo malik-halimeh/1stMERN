@@ -9,12 +9,23 @@ export interface Column<T> {
   render?: (row: T) => React.ReactNode;
 }
 
+// Controlled pagination driven by the server's meta { total, page, pages }.
+// When provided, `data` is treated as one already-fetched page: no client-side
+// slicing happens and prev/next delegate to onPageChange (a new fetch).
+export interface ServerPagination {
+  page: number;
+  pages: number;
+  total: number;
+  onPageChange: (page: number) => void;
+}
+
 interface DataTableProps<T> {
   columns: Column<T>[];
   data: T[];
   keyField: keyof T | string;
   onSelectionChange?: (selectedRows: T[]) => void;
   rowsPerPageDefault?: number;
+  serverPagination?: ServerPagination;
 }
 
 export function DataTable<T extends Record<string, any>>({
@@ -23,6 +34,7 @@ export function DataTable<T extends Record<string, any>>({
   keyField,
   onSelectionChange,
   rowsPerPageDefault = 10,
+  serverPagination,
 }: DataTableProps<T>) {
   // Sort State
   const [sortColumn, setSortColumn] = useState<string | null>(null);
@@ -94,13 +106,27 @@ export function DataTable<T extends Record<string, any>>({
     });
   }, [data, sortColumn, sortDirection, columns]);
 
-  // Paginated Data
+  // Paginated Data (server mode: data is already a single page — no slicing)
   const paginatedData = useMemo(() => {
+    if (serverPagination) return sortedData;
     const startIndex = (currentPage - 1) * rowsPerPage;
     return sortedData.slice(startIndex, startIndex + rowsPerPage);
-  }, [sortedData, currentPage, rowsPerPage]);
+  }, [sortedData, currentPage, rowsPerPage, serverPagination]);
 
-  const totalPages = Math.ceil(data.length / rowsPerPage) || 1;
+  const page = serverPagination ? serverPagination.page : currentPage;
+  const totalPages = serverPagination
+    ? serverPagination.pages
+    : Math.ceil(data.length / rowsPerPage) || 1;
+  const totalEntries = serverPagination ? serverPagination.total : data.length;
+
+  const goToPage = (p: number) => {
+    const next = Math.min(Math.max(p, 1), totalPages);
+    if (serverPagination) {
+      serverPagination.onPageChange(next);
+    } else {
+      setCurrentPage(next);
+    }
+  };
 
   // Bulk Selection Logic
   const paginatedIds = useMemo(() => {
@@ -282,21 +308,25 @@ export function DataTable<T extends Record<string, any>>({
       {/* Pagination Footer */}
       <div className="flex justify-between items-center bg-surface p-4 border border-dashboard-section-bg rounded-card shadow-level1 select-none">
         <span className="text-secondary text-caption">
-          Showing {data.length ? (currentPage - 1) * rowsPerPage + 1 : 0} to{' '}
-          {Math.min(currentPage * rowsPerPage, data.length)} of {data.length} entries
+          {serverPagination
+            ? `Showing ${data.length} of ${totalEntries} entries · page ${page} of ${totalPages}`
+            : `Showing ${data.length ? (currentPage - 1) * rowsPerPage + 1 : 0} to ${Math.min(
+                currentPage * rowsPerPage,
+                data.length
+              )} of ${data.length} entries`}
         </span>
 
         <div className="flex gap-2">
           <Button
             variant="secondary"
-            disabled={currentPage === 1}
-            onClick={() => setCurrentPage((c) => Math.max(c - 1, 1))}
+            disabled={page === 1}
+            onClick={() => goToPage(page - 1)}
             icon={<ChevronLeft className="h-4 w-4" />}
           />
           <Button
             variant="secondary"
-            disabled={currentPage === totalPages}
-            onClick={() => setCurrentPage((c) => Math.min(c + 1, totalPages))}
+            disabled={page >= totalPages}
+            onClick={() => goToPage(page + 1)}
             icon={<ChevronRight className="h-4 w-4" />}
           />
         </div>

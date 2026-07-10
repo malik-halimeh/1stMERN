@@ -15,7 +15,6 @@ import {
   Store,
   ChevronLeft,
   ChevronRight,
-  Search,
   User,
   Menu,
   X
@@ -243,15 +242,6 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({
               <Menu className="h-6 w-6" />
             </button>
 
-            {/* Quick Search */}
-            <div className="hidden sm:flex items-center gap-2 bg-dashboard-section-bg rounded-input px-3 py-1.5 border border-transparent focus-within:border-primary/20">
-              <Search className="h-4 w-4 text-text-muted" />
-              <input
-                type="text"
-                placeholder="Search orders, SKU..."
-                className="bg-transparent border-none text-secondary outline-none placeholder:text-text-muted text-sm w-48 focus:w-64 transition-all duration-300"
-              />
-            </div>
           </div>
 
           {/* Right Controls: User info & Dropdown */}

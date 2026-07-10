@@ -7,6 +7,8 @@ import Skeleton from '../../components/ui/Skeleton';
 import EmptyState from '../../components/ui/EmptyState';
 import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
+import SearchBox from '../../components/ui/SearchBox';
+import { getApiErrorMessage } from '../../utils/apiError';
 import { Package, Plus, Trash2 } from 'lucide-react';
 
 interface Variant {
@@ -87,6 +89,10 @@ const AdminProducts = () => {
   const [products, setProducts] = useState<ProductRow[]>([]);
   const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [meta, setMeta] = useState({ total: 0, pages: 1 });
+  const [searchInput, setSearchInput] = useState(''); // what's typed
+  const [search, setSearch] = useState(''); // applied on Enter
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductRow | null>(null);
@@ -99,18 +105,37 @@ const AdminProducts = () => {
 
   const fetchProducts = useCallback(async () => {
     try {
-      const res = await api.get('/products?limit=100');
+      const params = new URLSearchParams({ page: String(page), limit: '20' });
+      if (search) params.set('search', search); // full-text search on the server
+      const res = await api.get(`/products?${params.toString()}`);
+      // Deleting the last row of the last page leaves us past the end — step back
+      if (res.data.data.length === 0 && page > 1) {
+        setPage(page - 1);
+        return;
+      }
       setProducts(res.data.data);
+      setMeta({
+        total: res.data.meta?.total ?? res.data.data.length,
+        pages: res.data.meta?.pages ?? 1,
+      });
     } catch (err) {
       console.error('Failed to fetch products:', err);
       addToast('Failed to load products.', 'error');
     } finally {
       setLoading(false);
     }
-  }, [addToast]);
+  }, [page, search, addToast]);
+
+  const applySearch = () => {
+    setSearch(searchInput.trim());
+    setPage(1);
+  };
 
   useEffect(() => {
     fetchProducts();
+  }, [fetchProducts]);
+
+  useEffect(() => {
     // Flatten parent + subcategories into one select list
     api
       .get('/categories')
@@ -125,13 +150,14 @@ const AdminProducts = () => {
         setCategories(flat);
       })
       .catch((err) => console.error('Failed to fetch categories:', err));
-  }, [fetchProducts]);
+  }, []);
 
   const openCreate = () => {
     setEditingProduct(null);
     setForm({ ...EMPTY_FORM, variants: [{ ...EMPTY_VARIANT }] });
     setModalOpen(true);
   };
+
 
   const openEdit = (p: ProductRow) => {
     setEditingProduct(p);
@@ -215,12 +241,8 @@ const AdminProducts = () => {
       }
       setModalOpen(false);
       await fetchProducts();
-    } catch (err: any) {
-      const message =
-        err.response?.data?.error?.message ||
-        err.response?.data?.message ||
-        'Failed to save product.';
-      addToast(message, 'error');
+    } catch (err) {
+      addToast(getApiErrorMessage(err, 'Failed to save product.'), 'error');
     } finally {
       setSaving(false);
     }
@@ -233,10 +255,8 @@ const AdminProducts = () => {
       await api.delete(`/products/${p._id}`);
       addToast(`Product "${p.name}" deleted.`, 'success');
       await fetchProducts();
-    } catch (err: any) {
-      const message =
-        err.response?.data?.error?.message || 'Failed to delete product.';
-      addToast(message, 'error');
+    } catch (err) {
+      addToast(getApiErrorMessage(err, 'Failed to delete product.'), 'error');
     } finally {
       setDeletingId(null);
     }
@@ -352,6 +372,14 @@ const AdminProducts = () => {
         )}
       </div>
 
+      {/* Search by name/keywords (Enter to search, clear + Enter to reset) */}
+      <SearchBox
+        value={searchInput}
+        onChange={setSearchInput}
+        onSubmit={applySearch}
+        placeholder="Search products…"
+      />
+
       {loading ? (
         <div className="space-y-3">
           <Skeleton className="h-10" />
@@ -361,12 +389,22 @@ const AdminProducts = () => {
         <EmptyState
           icon={<Package className="h-12 w-12 text-text-muted" />}
           title="No products"
-          description="The catalog is empty."
+          description={search ? `No products match "${search}".` : 'The catalog is empty.'}
           actionLabel={canManage ? 'Add Product' : undefined}
           onAction={canManage ? openCreate : undefined}
         />
       ) : (
-        <DataTable columns={columns} data={products} keyField="_id" rowsPerPageDefault={15} />
+        <DataTable
+          columns={columns}
+          data={products}
+          keyField="_id"
+          serverPagination={{
+            page,
+            pages: meta.pages,
+            total: meta.total,
+            onPageChange: setPage,
+          }}
+        />
       )}
 
       {/* Create / Edit modal */}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -6,6 +6,8 @@ import { DataTable, type Column } from '../../components/ui/DataTable';
 import Skeleton from '../../components/ui/Skeleton';
 import EmptyState from '../../components/ui/EmptyState';
 import Button from '../../components/ui/Button';
+import SearchBox from '../../components/ui/SearchBox';
+import { getApiErrorMessage } from '../../utils/apiError';
 import { AlertTriangle } from 'lucide-react';
 
 interface AlertRow {
@@ -24,6 +26,18 @@ const AdminLowStock = () => {
   const [alerts, setAlerts] = useState<AlertRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+
+  // Filter as you type over the already-loaded list (endpoint returns all alerts)
+  const filteredAlerts = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return alerts;
+    return alerts.filter(
+      (a) =>
+        (a.productId?.name || '').toLowerCase().includes(term) ||
+        a.variantSku.toLowerCase().includes(term)
+    );
+  }, [alerts, search]);
 
   const canResolve = user?.role === 'inventory_manager';
 
@@ -49,9 +63,8 @@ const AdminLowStock = () => {
       await api.patch(`/low-stock/${id}/resolve`);
       addToast('Alert resolved.', 'success');
       await fetchAlerts();
-    } catch (err: any) {
-      const message = err.response?.data?.error?.message || 'Failed to resolve alert.';
-      addToast(message, 'error');
+    } catch (err) {
+      addToast(getApiErrorMessage(err, 'Failed to resolve alert.'), 'error');
     } finally {
       setResolvingId(null);
     }
@@ -141,19 +154,31 @@ const AdminLowStock = () => {
         </p>
       </div>
 
+      {/* Filter as you type */}
+      <SearchBox value={search} onChange={setSearch} placeholder="Search product or SKU…" />
+
       {loading ? (
         <div className="space-y-3">
           <Skeleton className="h-10" />
           <Skeleton className="h-64" />
         </div>
-      ) : alerts.length === 0 ? (
+      ) : filteredAlerts.length === 0 ? (
         <EmptyState
           icon={<AlertTriangle className="h-12 w-12 text-text-muted" />}
           title="No low-stock alerts"
-          description="All variants are above their stock thresholds."
+          description={
+            search.trim()
+              ? `No alerts match "${search.trim()}".`
+              : 'All variants are above their stock thresholds.'
+          }
         />
       ) : (
-        <DataTable columns={columns} data={alerts} keyField="_id" rowsPerPageDefault={15} />
+        <DataTable
+          columns={columns}
+          data={filteredAlerts}
+          keyField="_id"
+          rowsPerPageDefault={15}
+        />
       )}
     </div>
   );

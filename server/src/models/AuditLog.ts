@@ -7,7 +7,8 @@ export type AuditActionType =
   | 'role_change'
   | 'account_status_change'
   | 'coupon_cud'
-  | 'review_removal';
+  | 'review_removal'
+  | 'user_delete';
 
 export interface IAuditLog extends Document {
   actorId: mongoose.Types.ObjectId;
@@ -44,6 +45,7 @@ const AuditLogSchema = new Schema<IAuditLog>(
         'account_status_change',
         'coupon_cud',
         'review_removal',
+        'user_delete',
       ],
       required: true,
     },

@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import mongoose from 'mongoose';
 import User, { IUser } from '../models/User.js';
 import AuditLog from '../models/AuditLog.js';
+import { escapeRegex } from '../utils/escapeRegex.js';
 import {
     CreateUserValidator,
     UpdateUserValidator,
@@ -15,7 +16,7 @@ const SAFE_FIELDS =
 
 const writeUserAudit = async (
     req: Request,
-    actionType: 'role_change' | 'account_status_change',
+    actionType: 'role_change' | 'account_status_change' | 'user_delete',
     targetId: mongoose.Types.ObjectId,
     before: Record<string, unknown>,
     after: Record<string, unknown>
@@ -45,8 +46,16 @@ export const getUsers = async (req: Request, res: Response): Promise<void> => {
         const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 20));
         const skip = (page - 1) * limit;
 
-        const total = await User.countDocuments();
-        const users = await User.find()
+        // Search by name or email (partial, case-insensitive)
+        const q = req.query.q as string | undefined;
+        const filter: Record<string, unknown> = {};
+        if (q?.trim()) {
+            const regex = { $regex: escapeRegex(q), $options: 'i' };
+            filter.$or = [{ name: regex }, { email: regex }];
+        }
+
+        const total = await User.countDocuments(filter);
+        const users = await User.find(filter)
             .select(SAFE_FIELDS)
             .sort({ createdAt: -1 })
             .skip(skip)
@@ -244,6 +253,14 @@ export const deleteUser = async (
     res: Response
 ): Promise<void> => {
     try {
+        if (req.user?.userId === req.params.id) {
+            res.status(409).json({
+                success: false,
+                message: 'You cannot delete your own account.',
+            });
+            return;
+        }
+
         const user = await User.findByIdAndDelete(req.params.id);
 
         if (!user) {
@@ -253,6 +270,14 @@ export const deleteUser = async (
             });
             return;
         }
+
+        await writeUserAudit(
+            req,
+            'user_delete',
+            user._id as mongoose.Types.ObjectId,
+            { name: user.name, email: user.email, role: user.role },
+            {}
+        );
 
         res.status(200).json({
             success: true,

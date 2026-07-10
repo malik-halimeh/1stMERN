@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { DataTable, type Column } from '../../components/ui/DataTable';
 import Skeleton from '../../components/ui/Skeleton';
 import EmptyState from '../../components/ui/EmptyState';
+import SearchBox from '../../components/ui/SearchBox';
+import { getApiErrorMessage } from '../../utils/apiError';
 import { ShoppingBag } from 'lucide-react';
 
 type OrderStatus =
@@ -65,6 +67,8 @@ const StatusBadge = ({ status }: { status: OrderStatus }) => (
   </span>
 );
 
+const PAGE_SIZE = 20;
+
 const AdminOrders = () => {
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -73,37 +77,64 @@ const AdminOrders = () => {
   const [statusFilter, setStatusFilter] = useState<OrderStatus | 'all'>('all');
   const [updatingId, setUpdatingId] = useState<string | null>(null);
 
+  // Server-side pagination + search by order number
+  const [searchInput, setSearchInput] = useState(''); // what's typed
+  const [q, setQ] = useState(''); // applied on Enter
+  const [page, setPage] = useState(1);
+  const [meta, setMeta] = useState({ total: 0, pages: 1 });
+  const [reloadKey, setReloadKey] = useState(0);
+
   // Super admins get read-only visibility; only managers advance statuses
   const canAdvance = user?.role === 'inventory_manager';
 
-  const fetchOrders = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = statusFilter === 'all' ? '' : `&status=${statusFilter}`;
-      const res = await api.get(`/orders?limit=100${params}`);
-      setOrders(res.data.data);
-    } catch (err) {
-      console.error('Failed to fetch orders:', err);
-      addToast('Failed to load orders.', 'error');
-    } finally {
-      setLoading(false);
-    }
-  }, [statusFilter, addToast]);
-
   useEffect(() => {
-    fetchOrders();
-  }, [fetchOrders]);
+    const controller = new AbortController();
+    setLoading(true);
+    (async () => {
+      try {
+        const params = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) });
+        if (statusFilter !== 'all') params.set('status', statusFilter);
+        if (q) params.set('q', q);
+        const res = await api.get(`/orders?${params.toString()}`, {
+          signal: controller.signal,
+        });
+        // A filter change can leave us past the last page — step back
+        if (res.data.data.length === 0 && page > 1) {
+          setPage(page - 1);
+          return;
+        }
+        setOrders(res.data.data);
+        setMeta({
+          total: res.data.meta?.total ?? res.data.data.length,
+          pages: res.data.meta?.pages ?? 1,
+        });
+        setLoading(false);
+      } catch (err) {
+        if (controller.signal.aborted) return;
+        console.error('Failed to fetch orders:', err);
+        addToast('Failed to load orders.', 'error');
+        setLoading(false);
+      }
+    })();
+
+    return () => controller.abort();
+  }, [statusFilter, q, page, reloadKey, addToast]);
+
+  const refetchOrders = () => setReloadKey((k) => k + 1);
+
+  const applySearch = () => {
+    setQ(searchInput.trim());
+    setPage(1);
+  };
 
   const changeStatus = async (order: OrderRow, status: OrderStatus) => {
     setUpdatingId(order._id);
     try {
       await api.patch(`/orders/${order._id}/status`, { status });
       addToast(`Order ${order.orderNumber} moved to ${status}.`, 'success');
-      await fetchOrders();
-    } catch (err: any) {
-      const message =
-        err.response?.data?.error?.message || 'Failed to update order status.';
-      addToast(message, 'error');
+      refetchOrders();
+    } catch (err) {
+      addToast(getApiErrorMessage(err, 'Failed to update order status.'), 'error');
     } finally {
       setUpdatingId(null);
     }
@@ -206,12 +237,23 @@ const AdminOrders = () => {
         </p>
       </div>
 
+      {/* Search by order number (Enter to search, clear + Enter to reset) */}
+      <SearchBox
+        value={searchInput}
+        onChange={setSearchInput}
+        onSubmit={applySearch}
+        placeholder="Search order #…"
+      />
+
       {/* Status filter chips */}
       <div className="flex flex-wrap gap-2">
         {(['all', ...ALL_STATUSES] as const).map((s) => (
           <button
             key={s}
-            onClick={() => setStatusFilter(s as OrderStatus | 'all')}
+            onClick={() => {
+              setStatusFilter(s as OrderStatus | 'all');
+              setPage(1);
+            }}
             className={`px-3 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wide border transition-colors ${
               statusFilter === s
                 ? 'bg-primary text-white border-primary'
@@ -233,13 +275,25 @@ const AdminOrders = () => {
           icon={<ShoppingBag className="h-12 w-12 text-text-muted" />}
           title="No orders found"
           description={
-            statusFilter === 'all'
-              ? 'No orders have been placed yet.'
-              : `No orders with status "${statusFilter}".`
+            q
+              ? `No orders match "${q}".`
+              : statusFilter === 'all'
+                ? 'No orders have been placed yet.'
+                : `No orders with status "${statusFilter}".`
           }
         />
       ) : (
-        <DataTable columns={columns} data={orders} keyField="_id" rowsPerPageDefault={15} />
+        <DataTable
+          columns={columns}
+          data={orders}
+          keyField="_id"
+          serverPagination={{
+            page,
+            pages: meta.pages,
+            total: meta.total,
+            onPageChange: setPage,
+          }}
+        />
       )}
     </div>
   );

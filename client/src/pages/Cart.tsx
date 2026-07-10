@@ -8,6 +8,30 @@ import EmptyState from '../components/ui/EmptyState.js';
 import { useToast } from '../context/ToastContext.js';
 import { useAuth } from '../context/AuthContext.js';
 import api from '../services/api.js';
+import { getApiErrorMessage } from '../utils/apiError.js';
+
+// Shapes returned by GET /cart (populated product + its variants)
+interface ApiCartVariant {
+  sku?: string;
+  priceDeltaCents?: number;
+  stock?: number;
+  color?: string;
+  capacity?: string;
+}
+interface ApiCartProduct {
+  _id?: string;
+  name?: string;
+  brand?: string;
+  slug?: string;
+  thumbnail?: string;
+  basePriceCents?: number;
+  variants?: ApiCartVariant[];
+}
+interface ApiCartItem {
+  productId: ApiCartProduct | string;
+  variantSku: string;
+  quantity: number;
+}
 
 interface CartItem {
   productId: string;
@@ -50,11 +74,14 @@ const Cart: React.FC = () => {
         // Authenticated cart from server
         const res = await api.get('/cart');
         if (res.data?.success) {
-          const items = res.data.data.items.map((item: any) => {
-            const product = item.productId || {};
-            const variant = product.variants?.find((v: any) => v.sku === item.variantSku) || {};
+          const items = res.data.data.items.map((item: ApiCartItem) => {
+            const product: ApiCartProduct =
+              typeof item.productId === 'object' && item.productId ? item.productId : {};
+            const variant: ApiCartVariant =
+              product.variants?.find((v) => v.sku === item.variantSku) || {};
             return {
-              productId: product._id || item.productId,
+              productId:
+                product._id || (typeof item.productId === 'string' ? item.productId : ''),
               variantSku: item.variantSku,
               quantity: item.quantity,
               name: product.name || 'Unknown Product',
@@ -109,9 +136,8 @@ const Cart: React.FC = () => {
           setCartItems(updatedItems);
           addToast('Cart updated.', 'success');
         }
-      } catch (err: any) {
-        const msg = err.response?.data?.error?.message || 'Failed to update item quantity.';
-        addToast(msg, 'error');
+      } catch (err) {
+        addToast(getApiErrorMessage(err, 'Failed to update item quantity.'), 'error');
       }
     } else {
       // Guest cart local update
@@ -136,7 +162,7 @@ const Cart: React.FC = () => {
           setCartItems(updatedItems);
           addToast('Item removed from cart.', 'success');
         }
-      } catch (err: any) {
+      } catch {
         addToast('Failed to remove cart item.', 'error');
       }
     } else {
@@ -187,9 +213,8 @@ const Cart: React.FC = () => {
         });
         addToast(`Coupon "${coupon.code}" successfully applied!`, 'success');
       }
-    } catch (err: any) {
-      const msg = err.response?.data?.error?.message || 'Invalid or expired coupon code.';
-      addToast(msg, 'error');
+    } catch (err) {
+      addToast(getApiErrorMessage(err, 'Invalid or expired coupon code.'), 'error');
     } finally {
       setIsApplyingCoupon(false);
     }

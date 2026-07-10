@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -6,6 +6,8 @@ import { DataTable, type Column } from '../../components/ui/DataTable';
 import Skeleton from '../../components/ui/Skeleton';
 import EmptyState from '../../components/ui/EmptyState';
 import Button from '../../components/ui/Button';
+import SearchBox from '../../components/ui/SearchBox';
+import { getApiErrorMessage } from '../../utils/apiError';
 import { Ticket } from 'lucide-react';
 
 interface CouponRow {
@@ -27,6 +29,14 @@ const AdminCoupons = () => {
   const [coupons, setCoupons] = useState<CouponRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+
+  // Filter as you type over the already-loaded list (endpoint returns all coupons)
+  const filteredCoupons = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return coupons;
+    return coupons.filter((c) => c.code.toLowerCase().includes(term));
+  }, [coupons, search]);
 
   const canManage = user?.role === 'inventory_manager';
 
@@ -55,9 +65,8 @@ const AdminCoupons = () => {
         'success'
       );
       await fetchCoupons();
-    } catch (err: any) {
-      const message = err.response?.data?.error?.message || 'Failed to update coupon.';
-      addToast(message, 'error');
+    } catch (err) {
+      addToast(getApiErrorMessage(err, 'Failed to update coupon.'), 'error');
     } finally {
       setTogglingId(null);
     }
@@ -163,19 +172,31 @@ const AdminCoupons = () => {
         </p>
       </div>
 
+      {/* Filter as you type */}
+      <SearchBox value={search} onChange={setSearch} placeholder="Search coupon code…" />
+
       {loading ? (
         <div className="space-y-3">
           <Skeleton className="h-10" />
           <Skeleton className="h-64" />
         </div>
-      ) : coupons.length === 0 ? (
+      ) : filteredCoupons.length === 0 ? (
         <EmptyState
           icon={<Ticket className="h-12 w-12 text-text-muted" />}
           title="No coupons"
-          description="No discount codes have been created yet."
+          description={
+            search.trim()
+              ? `No coupons match "${search.trim()}".`
+              : 'No discount codes have been created yet.'
+          }
         />
       ) : (
-        <DataTable columns={columns} data={coupons} keyField="_id" rowsPerPageDefault={15} />
+        <DataTable
+          columns={columns}
+          data={filteredCoupons}
+          keyField="_id"
+          rowsPerPageDefault={15}
+        />
       )}
     </div>
   );

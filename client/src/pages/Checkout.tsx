@@ -8,7 +8,9 @@ import Button from '../components/ui/Button.js';
 import Input from '../components/ui/Input.js';
 import { useToast } from '../context/ToastContext.js';
 import { useAuth } from '../context/AuthContext.js';
+import axios from 'axios';
 import api from '../services/api.js';
+import { getApiErrorMessage } from '../utils/apiError.js';
 
 const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 'pk_test_mock_key');
 
@@ -64,8 +66,8 @@ const CheckoutForm: React.FC<{ clientSecret: string; paymentIntentId: string; to
         // Redirecting cases are handled by Stripe redirecting to return_url
         addToast('Payment redirected for verification.', 'info');
       }
-    } catch (err: any) {
-      addToast(err.message || 'Payment failed.', 'error');
+    } catch (err) {
+      addToast(getApiErrorMessage(err, 'Payment failed.'), 'error');
     } finally {
       setIsProcessing(false);
     }
@@ -117,7 +119,7 @@ const MockPaymentForm: React.FC<{ paymentIntentId: string; totalCents: number; o
         addToast('Payment authorized successfully (Mock Sandbox Mode).', 'success');
         onPaymentSuccess();
       }, 1500);
-    } catch (err: any) {
+    } catch {
       addToast('Mock checkout failed. Please retry.', 'error');
       setIsProcessing(false);
     }
@@ -205,7 +207,7 @@ const Checkout: React.FC = () => {
   // Default address index selector
   useEffect(() => {
     if (user?.addresses && user.addresses.length > 0) {
-      const defaultIdx = user.addresses.findIndex((addr: any) => addr.isDefault);
+      const defaultIdx = user.addresses.findIndex((addr) => addr.isDefault);
       setSelectedAddressIndex(defaultIdx > -1 ? defaultIdx : 0);
     } else {
       setShowNewAddressForm(true);
@@ -249,7 +251,7 @@ const Checkout: React.FC = () => {
         // Auto select the newly added address
         setSelectedAddressIndex(res.data.data.addresses.length - 1);
       }
-    } catch (err: any) {
+    } catch {
       addToast('Failed to save address.', 'error');
     } finally {
       setIsSavingAddress(false);
@@ -290,10 +292,9 @@ const Checkout: React.FC = () => {
         setStep(2);
         addToast('Payment session initialized.', 'success');
       }
-    } catch (err: any) {
-      const msg = err.response?.data?.error?.message || 'Checkout failed. Verify items stock availability.';
-      addToast(msg, 'error');
-      if (err.response?.status === 409) {
+    } catch (err) {
+      addToast(getApiErrorMessage(err, 'Checkout failed. Verify items stock availability.'), 'error');
+      if (axios.isAxiosError(err) && err.response?.status === 409) {
         // Stock conflict, back to cart
         navigate('/cart');
       }
@@ -388,7 +389,7 @@ const Checkout: React.FC = () => {
             {/* Address Radios list */}
             {user?.addresses && user.addresses.length > 0 && (
               <div className="space-y-3">
-                {user.addresses.map((addr: any, index: number) => (
+                {user.addresses.map((addr, index) => (
                   <label
                     key={index}
                     onClick={() => setSelectedAddressIndex(index)}

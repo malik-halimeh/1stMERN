@@ -10,6 +10,7 @@ import User from '../models/User.js';
 import ProductEvent from '../models/ProductEvent.js';
 import { sendOrderConfirmationEmail, sendOrderStatusChangeEmail } from '../services/mailer.js';
 import { AppError } from '../utils/errors.js';
+import { escapeRegex } from '../utils/escapeRegex.js';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_mock_key');
 
@@ -327,6 +328,12 @@ export const getOrders = async (req: Request, res: Response, next: NextFunction)
     const statusFilter = req.query.status as string | undefined;
     if (isStaff && statusFilter) {
       filter.status = statusFilter;
+    }
+
+    // Staff quick search by order number (partial, case-insensitive)
+    const q = req.query.q as string | undefined;
+    if (isStaff && q?.trim()) {
+      filter.orderNumber = { $regex: escapeRegex(q), $options: 'i' };
     }
 
     const total = await Order.countDocuments(filter);

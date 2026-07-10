@@ -10,6 +10,7 @@ import Badge from '../components/ui/Badge.js';
 import { useToast } from '../context/ToastContext.js';
 import { useAuth } from '../context/AuthContext.js';
 import api from '../services/api.js';
+import { getApiErrorMessage } from '../utils/apiError.js';
 
 type TabType = 'orders' | 'addresses' | 'wishlist' | 'details';
 
@@ -29,6 +30,17 @@ interface UserAddress {
   city: string;
   country: string;
   isDefault?: boolean;
+}
+
+// Wishlist entry as returned by GET /wishlist (populated product)
+interface WishlistItem {
+  _id: string;
+  name?: string;
+  brand?: string;
+  slug?: string;
+  thumbnail?: string;
+  basePriceCents: number;
+  variants?: { sku?: string; priceDeltaCents?: number }[];
 }
 
 const AccountDashboard: React.FC = () => {
@@ -55,7 +67,7 @@ const AccountDashboard: React.FC = () => {
   const [isSavingAddress, setIsSavingAddress] = useState(false);
 
   // Wishlist state
-  const [wishlistItems, setWishlistItems] = useState<any[]>([]);
+  const [wishlistItems, setWishlistItems] = useState<WishlistItem[]>([]);
   const [wishlistLoading, setWishlistLoading] = useState(false);
 
   // Profile details state
@@ -129,7 +141,7 @@ const AccountDashboard: React.FC = () => {
         setUser({ ...user, name: res.data.data.name });
         addToast('Account profile details updated.', 'success');
       }
-    } catch (err: any) {
+    } catch {
       addToast('Profile update failed.', 'error');
     } finally {
       setIsSavingProfile(false);
@@ -170,7 +182,7 @@ const AccountDashboard: React.FC = () => {
         setLabel('Home');
         setShowAddressForm(false);
       }
-    } catch (err: any) {
+    } catch {
       addToast('Failed to save shipping address.', 'error');
     } finally {
       setIsSavingAddress(false);
@@ -188,7 +200,7 @@ const AccountDashboard: React.FC = () => {
         setUser({ ...user, addresses: res.data.data.addresses });
         addToast('Address removed successfully.', 'success');
       }
-    } catch (err: any) {
+    } catch {
       addToast('Failed to delete address.', 'error');
     }
   };

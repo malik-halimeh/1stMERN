@@ -89,8 +89,11 @@ const AdminDashboard = () => {
           totalOrders: orders.data.meta?.total ?? 0,
           pendingOrders: pending.data.meta?.total ?? 0,
           totalProducts: products.data.meta?.total ?? 0,
-          activeAlerts: lowStock.data.data.filter((a: any) => a.status === 'active').length,
-          activeCoupons: coupons.data.data.filter((c: any) => c.isActive).length,
+          activeAlerts: lowStock.data.data.filter(
+            (a: { status: string }) => a.status === 'active'
+          ).length,
+          activeCoupons: coupons.data.data.filter((c: { isActive: boolean }) => c.isActive)
+            .length,
           recentOrders: orders.data.data,
         });
       } catch (err) {

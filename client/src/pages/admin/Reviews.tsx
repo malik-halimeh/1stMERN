@@ -5,6 +5,8 @@ import { DataTable, type Column } from '../../components/ui/DataTable';
 import Skeleton from '../../components/ui/Skeleton';
 import EmptyState from '../../components/ui/EmptyState';
 import Button from '../../components/ui/Button';
+import SearchBox from '../../components/ui/SearchBox';
+import { getApiErrorMessage } from '../../utils/apiError';
 import { Star } from 'lucide-react';
 
 interface ReviewRow {
@@ -16,23 +18,45 @@ interface ReviewRow {
   createdAt: string;
 }
 
+const PAGE_SIZE = 20;
+
 const AdminReviews = () => {
   const { addToast } = useToast();
   const [reviews, setReviews] = useState<ReviewRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [meta, setMeta] = useState({ total: 0, pages: 1 });
+  const [searchInput, setSearchInput] = useState(''); // what's typed
+  const [q, setQ] = useState(''); // applied on Enter
 
   const fetchReviews = useCallback(async () => {
     try {
-      const res = await api.get('/reviews?limit=100');
+      const params = new URLSearchParams({ page: String(page), limit: String(PAGE_SIZE) });
+      if (q) params.set('q', q); // review-text search on the server
+      const res = await api.get(`/reviews?${params.toString()}`);
+      // Removing the last row of the last page leaves us past the end — step back
+      if (res.data.data.length === 0 && page > 1) {
+        setPage(page - 1);
+        return;
+      }
       setReviews(res.data.data);
+      setMeta({
+        total: res.data.meta?.total ?? res.data.data.length,
+        pages: res.data.meta?.pages ?? 1,
+      });
     } catch (err) {
       console.error('Failed to fetch reviews:', err);
       addToast('Failed to load reviews.', 'error');
     } finally {
       setLoading(false);
     }
-  }, [addToast]);
+  }, [page, q, addToast]);
+
+  const applySearch = () => {
+    setQ(searchInput.trim());
+    setPage(1);
+  };
 
   useEffect(() => {
     fetchReviews();
@@ -45,9 +69,8 @@ const AdminReviews = () => {
       await api.delete(`/reviews/${row._id}`);
       addToast('Review removed (audit-logged).', 'success');
       await fetchReviews();
-    } catch (err: any) {
-      const message = err.response?.data?.error?.message || 'Failed to remove review.';
-      addToast(message, 'error');
+    } catch (err) {
+      addToast(getApiErrorMessage(err, 'Failed to remove review.'), 'error');
     } finally {
       setRemovingId(null);
     }
@@ -126,6 +149,14 @@ const AdminReviews = () => {
         </p>
       </div>
 
+      {/* Search review text (Enter to search, clear + Enter to reset) */}
+      <SearchBox
+        value={searchInput}
+        onChange={setSearchInput}
+        onSubmit={applySearch}
+        placeholder="Search review text…"
+      />
+
       {loading ? (
         <div className="space-y-3">
           <Skeleton className="h-10" />
@@ -135,10 +166,22 @@ const AdminReviews = () => {
         <EmptyState
           icon={<Star className="h-12 w-12 text-text-muted" />}
           title="No reviews"
-          description="No customer reviews have been submitted yet."
+          description={
+            q ? `No reviews match "${q}".` : 'No customer reviews have been submitted yet.'
+          }
         />
       ) : (
-        <DataTable columns={columns} data={reviews} keyField="_id" rowsPerPageDefault={15} />
+        <DataTable
+          columns={columns}
+          data={reviews}
+          keyField="_id"
+          serverPagination={{
+            page,
+            pages: meta.pages,
+            total: meta.total,
+            onPageChange: setPage,
+          }}
+        />
       )}
     </div>
   );

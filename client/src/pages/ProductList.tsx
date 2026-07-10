@@ -10,13 +10,23 @@ import EmptyState from '../components/ui/EmptyState.js';
 import { useToast } from '../context/ToastContext.js';
 import { useAuth } from '../context/AuthContext.js';
 import { addToGuestWishlist } from './Wishlist.js';
+import axios from 'axios';
 import api from '../services/api.js';
+import { getApiErrorMessage } from '../utils/apiError.js';
 import { Filter, SlidersHorizontal, ChevronLeft, ChevronRight, Star, X } from 'lucide-react';
 
 interface CategoryDoc {
   _id: string;
   name: string;
   slug: string;
+}
+
+// Shape returned by GET /categories (parent with nested children)
+interface ApiCategory {
+  _id: string;
+  name: string;
+  slug: string;
+  subcategories?: { _id: string; name: string; slug: string }[];
 }
 
 const ProductList: React.FC = () => {
@@ -60,9 +70,9 @@ const ProductList: React.FC = () => {
         if (res.data?.success) {
           // Flatten child categories for simple sidebar options
           const flat: CategoryDoc[] = [];
-          res.data.data.forEach((cat: any) => {
+          res.data.data.forEach((cat: ApiCategory) => {
             flat.push({ _id: cat._id, name: cat.name, slug: cat.slug });
-            cat.subcategories?.forEach((sub: any) => {
+            cat.subcategories?.forEach((sub) => {
               flat.push({ _id: sub._id, name: `↳ ${sub.name}`, slug: sub.slug });
             });
           });
@@ -145,10 +155,11 @@ const ProductList: React.FC = () => {
       if (res.data?.success) {
         addToast('Item added to your shopping cart!', 'success');
       }
-    } catch (err: any) {
-      const msg = err.response?.data?.error?.message || 'Please log in to add items to your cart.';
-      addToast(msg, err.response?.status === 401 ? 'warning' : 'error');
-      if (err.response?.status === 401) {
+    } catch (err) {
+      const status = axios.isAxiosError(err) ? err.response?.status : undefined;
+      const msg = getApiErrorMessage(err, 'Please log in to add items to your cart.');
+      addToast(msg, status === 401 ? 'warning' : 'error');
+      if (status === 401) {
         navigate(`/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`);
       }
     }
@@ -170,9 +181,8 @@ const ProductList: React.FC = () => {
       if (res.data?.success) {
         addToast('Item added to your wishlist!', 'success');
       }
-    } catch (err: any) {
-      const msg = err.response?.data?.error?.message || 'Failed to update wishlist.';
-      addToast(msg, 'error');
+    } catch (err) {
+      addToast(getApiErrorMessage(err, 'Failed to update wishlist.'), 'error');
     }
   };
 
