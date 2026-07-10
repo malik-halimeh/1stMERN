@@ -112,7 +112,15 @@ const Register: React.FC = () => {
 
     setIsVerifying(true);
     try {
-      await verifyEmail(pendingEmail, trimmed);
+      const sessionUser = await verifyEmail(pendingEmail, trimmed);
+
+      // Staff accounts land on the admin dashboard, never the storefront
+      if (sessionUser.role === 'super_admin' || sessionUser.role === 'inventory_manager') {
+        addToast('Email verified — welcome to OptiCart!', 'success');
+        navigate('/admin/dashboard', { replace: true });
+        return;
+      }
+
       await mergeGuestData(addToast);
       await refreshShopData();
       addToast('Email verified — welcome to OptiCart!', 'success');
@@ -139,7 +147,14 @@ const Register: React.FC = () => {
   // Google sign-up: email is already verified by Google
   const handleGoogleCredential = async (credential: string) => {
     try {
-      await loginWithGoogle(credential);
+      const sessionUser = await loginWithGoogle(credential);
+
+      if (sessionUser.role === 'super_admin' || sessionUser.role === 'inventory_manager') {
+        addToast('Signed in with Google — welcome to OptiCart!', 'success');
+        navigate('/admin/dashboard', { replace: true });
+        return;
+      }
+
       await mergeGuestData(addToast);
       await refreshShopData();
       addToast('Signed in with Google — welcome to OptiCart!', 'success');

@@ -10,6 +10,7 @@ import { useAuth } from '../context/AuthContext.js';
 import { useShop } from '../context/ShopContext.js';
 import api from '../services/api.js';
 import { getApiErrorMessage } from '../utils/apiError.js';
+import { getGuestCartItems, setGuestCartItems } from '../utils/guestCart.js';
 
 // Shape returned by GET /cart — flattened, validated items
 interface ApiCartItem {
@@ -94,15 +95,9 @@ const Cart: React.FC = () => {
         }
       } else {
         // Guest cart from localStorage
-        const stored = localStorage.getItem('guest_cart');
-        if (stored) {
-          const guestCart = JSON.parse(stored);
-          setCartItems(guestCart.items || []);
-          syncBadge(guestCart.items || []);
-        } else {
-          setCartItems([]);
-          syncBadge([]);
-        }
+        const guestItems = getGuestCartItems();
+        setCartItems(guestItems);
+        syncBadge(guestItems);
       }
     } catch (error) {
       console.error('Failed to load cart:', error);
@@ -143,7 +138,7 @@ const Cart: React.FC = () => {
       updatedItems[index].quantity = newQty;
       setCartItems(updatedItems);
       syncBadge(updatedItems);
-      localStorage.setItem('guest_cart', JSON.stringify({ items: updatedItems }));
+      setGuestCartItems(updatedItems);
       addToast('Cart updated.', 'success');
     }
   };
@@ -170,7 +165,7 @@ const Cart: React.FC = () => {
       const updatedItems = cartItems.filter((_, idx) => idx !== index);
       setCartItems(updatedItems);
       syncBadge(updatedItems);
-      localStorage.setItem('guest_cart', JSON.stringify({ items: updatedItems }));
+      setGuestCartItems(updatedItems);
       addToast('Item removed from cart.', 'success');
     }
   };

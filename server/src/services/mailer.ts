@@ -70,16 +70,22 @@ export const sendVerificationCodeEmail = (email: string, code: string) => {
 export const sendOrderConfirmationEmail = (email: string, orderNumber: string, totalAmount: number) => {
   return deliver(
     email,
-    `Your OptiCart order is confirmed! - ${orderNumber}`,
-    `Thank you for shopping with OptiCart! Total Paid: $${(totalAmount / 100).toFixed(2)}.`
+    `We received your OptiCart order - ${orderNumber}`,
+    `Thank you for shopping with OptiCart! Total Paid: $${(totalAmount / 100).toFixed(2)}.\n\nYour order is being reviewed by our team — you will get another update as soon as it is confirmed.`
   );
 };
 
-export const sendOrderStatusChangeEmail = (email: string, orderNumber: string, status: string) => {
+export const sendOrderStatusChangeEmail = (
+  email: string,
+  orderNumber: string,
+  status: string,
+  reason?: string
+) => {
+  const reasonLine = reason ? `\n\nReason: ${reason}` : '';
   return deliver(
     email,
     `Your OptiCart order status has changed: ${status.toUpperCase()} - ${orderNumber}`,
-    `Your order is now marked as ${status}. You can trace tracking details in your profile.`
+    `Your order is now marked as ${status}.${reasonLine}\n\nYou can trace tracking details in your profile.`
   );
 };
 

@@ -12,7 +12,6 @@ import {
   FileText,
   BarChart3,
   LogOut,
-  Store,
   ChevronLeft,
   ChevronRight,
   User,
@@ -184,16 +183,8 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({
         </nav>
       </div>
 
-      {/* View Store + Logout Rows */}
+      {/* Logout Row */}
       <div className="p-2 border-t border-white/10 select-none">
-        <Link
-          to="/"
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-btn text-secondary font-medium text-text-muted hover:bg-white/5 hover:text-white transition-colors group"
-          title={isCollapsed ? 'View Store' : undefined}
-        >
-          <Store className="h-5 w-5 text-text-muted group-hover:text-white flex-shrink-0" />
-          {!isCollapsed && <span>View Store</span>}
-        </Link>
         <button
           onClick={handleLogout}
           className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-btn text-secondary font-medium text-text-muted hover:bg-red-950/40 hover:text-red-300 transition-colors group`}

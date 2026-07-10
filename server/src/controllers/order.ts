@@ -208,9 +208,10 @@ export const stripeWebhook = async (req: Request, res: Response, next: NextFunct
 
       const order = await Order.findOne({ paymentIntentId: paymentIntentId });
 
-      if (order && order.status === 'pending') {
-        // Transition order state
-        order.status = 'confirmed';
+      // Idempotency guard on paymentStatus: the order itself STAYS 'pending'
+      // until staff presses Confirm in the admin panel — payment success only
+      // captures funds, reserves stock, and clears the cart.
+      if (order && order.paymentStatus === 'pending') {
         order.paymentStatus = 'succeeded';
 
         // Decrement variants stock and check low-stock triggers
@@ -264,7 +265,7 @@ export const stripeWebhook = async (req: Request, res: Response, next: NextFunct
         }
 
         await order.save();
-        console.log(`✓ Order ${order.orderNumber} successfully confirmed via webhook!`);
+        console.log(`✓ Order ${order.orderNumber} payment captured — awaiting staff confirmation.`);
 
         // Fire order confirmation email (non-blocking)
         try {
@@ -299,7 +300,9 @@ export const getOrderStatus = async (req: Request, res: Response, next: NextFunc
 
     res.status(200).json({
       success: true,
-      confirmed: order.status !== 'pending',
+      // "Confirmed" here means the PAYMENT went through — the order itself
+      // stays 'pending' until staff confirms it in the admin panel
+      confirmed: order.paymentStatus === 'succeeded' || order.status !== 'pending',
       order,
     });
   } catch (error) {
@@ -472,6 +475,16 @@ export const updateOrderStatus = async (req: Request, res: Response, next: NextF
       throw new AppError('VALIDATION_FAILED', `Status must be one of: ${validStatuses.join(', ')}.`, 422);
     }
 
+    // Cancellations and refunds must carry a reason the customer will see
+    const reason = typeof note === 'string' ? note.trim().slice(0, 500) : '';
+    if ((status === 'cancelled' || status === 'refunded') && !reason) {
+      throw new AppError(
+        'VALIDATION_FAILED',
+        `A reason is required when marking an order as ${status}.`,
+        422
+      );
+    }
+
     const order = await Order.findById(id);
     if (!order) {
       throw new AppError('ORDER_NOT_FOUND', 'Order not found.', 404);
@@ -494,7 +507,7 @@ export const updateOrderStatus = async (req: Request, res: Response, next: NextF
     order.statusHistory.push({
       status,
       timestamp: new Date(),
-      note: note || `Status updated to ${status}.`,
+      note: reason || `Status updated to ${status}.`,
       updatedBy: new mongoose.Types.ObjectId(req.user.userId),
     });
 
@@ -516,11 +529,45 @@ export const updateOrderStatus = async (req: Request, res: Response, next: NextF
       console.error('Failed to write audit log for order status change:', auditErr.message);
     }
 
-    // Fire status-change email (non-blocking)
+    // In-app notification for the order owner (bell in the storefront header)
+    try {
+      const Notification = (await import('../models/Notification.js')).default;
+      const titles: Record<string, string> = {
+        confirmed: `Order ${order.orderNumber} confirmed ✓`,
+        processing: `Order ${order.orderNumber} is being processed`,
+        shipped: `Order ${order.orderNumber} has shipped 📦`,
+        delivered: `Order ${order.orderNumber} was delivered 🎉`,
+        cancelled: `Order ${order.orderNumber} was cancelled`,
+        refunded: `Order ${order.orderNumber} was refunded`,
+      };
+      const messages: Record<string, string> = {
+        confirmed: 'Your order has been confirmed and will be prepared for shipping.',
+        processing: 'Your order is being prepared.',
+        shipped: 'Your order is on its way.',
+        delivered: 'Your order has been delivered. Enjoy!',
+        cancelled: `Your order was cancelled. Reason: ${reason}`,
+        refunded: `Your order was refunded. Reason: ${reason}`,
+      };
+      await Notification.create({
+        userId: order.userId,
+        orderId: order._id,
+        title: titles[status] || `Order ${order.orderNumber} updated`,
+        message: messages[status] || `Status changed to ${status}.`,
+      });
+    } catch (notifyErr: any) {
+      console.error('Failed to create order notification:', notifyErr.message);
+    }
+
+    // Fire status-change email (non-blocking) — includes the reason if any
     try {
       const buyer = await User.findById(order.userId);
       if (buyer && ['confirmed', 'shipped', 'delivered', 'cancelled', 'refunded'].includes(status)) {
-        sendOrderStatusChangeEmail(buyer.email, order.orderNumber, status);
+        sendOrderStatusChangeEmail(
+          buyer.email,
+          order.orderNumber,
+          status,
+          status === 'cancelled' || status === 'refunded' ? reason : undefined
+        );
       }
     } catch (mailErr: any) {
       console.error('Failed to send status change email:', mailErr.message);

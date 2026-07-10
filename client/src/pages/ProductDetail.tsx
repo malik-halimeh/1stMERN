@@ -11,7 +11,7 @@ import { useToast } from '../context/ToastContext.js';
 import { useAuth } from '../context/AuthContext.js';
 import { useShop } from '../context/ShopContext.js';
 import api from '../services/api.js';
-import { Star, ShoppingCart, Heart, Plus, Minus, MessageSquare, ShieldCheck } from 'lucide-react';
+import { Star, ShoppingCart, Heart, MessageSquare, ShieldCheck } from 'lucide-react';
 
 // ─── View event batching (module-level) ──────────────────────────────────────
 // Events are buffered here; flushed after FLUSH_DELAY_MS of inactivity OR on page unload.
@@ -62,8 +62,7 @@ const ProductDetail: React.FC = () => {
   const [product, setProduct] = useState<ProductDoc | null>(null);
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null);
   const [activeImage, setActiveImage] = useState<string>('');
-  const [quantity, setQuantity] = useState(1);
-  
+
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'description' | 'specifications' | 'reviews'>('description');
   
@@ -96,13 +95,11 @@ const ProductDetail: React.FC = () => {
           const prodData = res.data.data;
           setProduct(prodData);
           
-          // Select default variant and default active image
+          // Select default variant and default active image (variant photo wins)
           if (prodData.variants?.length > 0) {
             setSelectedVariant(prodData.variants[0]);
           }
-          if (prodData.images?.length > 0) {
-            setActiveImage(prodData.images[0].url);
-          }
+          setActiveImage(prodData.variants?.[0]?.image?.url || prodData.images?.[0]?.url || '');
 
           // Track recently viewed local lists
           trackRecentlyViewed(prodData);
@@ -197,18 +194,19 @@ const ProductDetail: React.FC = () => {
     }
   };
 
-  // Add to Cart handler — updates the shared header badge count
+  // Add to Cart handler — always adds 1; quantity is changed on the Cart page
   const handleAddToCart = async () => {
     if (!product || !selectedVariant) return;
     try {
-      await addItemToCart(product._id, selectedVariant.sku, quantity);
-      addToast(`Added ${quantity} item(s) to your cart!`, 'success');
-    } catch (err: any) {
-      const msg = err.response?.data?.error?.message || 'Please log in to add items to your cart.';
-      addToast(msg, err.response?.status === 401 ? 'warning' : 'error');
-      if (err.response?.status === 401) {
-        navigate(`/login?redirect=${encodeURIComponent(window.location.pathname)}`);
+      const status = await addItemToCart(product._id, selectedVariant.sku, 1);
+      if (status === 'exists') {
+        addToast('This product is already in your cart.', 'info');
+      } else {
+        addToast('Product added to cart.', 'success');
       }
+    } catch (err: any) {
+      const msg = err.response?.data?.error?.message || err?.message || 'Could not add item to cart.';
+      addToast(msg, 'error');
     }
   };
 
@@ -413,7 +411,9 @@ const ProductDetail: React.FC = () => {
                         key={v.sku}
                         onClick={() => {
                           setSelectedVariant(v);
-                          setQuantity(1);
+                          // Variant photo takes over the gallery; fall back to
+                          // the first product image for variants without one
+                          setActiveImage(v.image?.url || product.images?.[0]?.url || '');
                         }}
                         className={`text-xs px-3.5 py-2 rounded-btn border font-medium transition-all ${
                           selectedVariant?.sku === v.sku
@@ -429,28 +429,8 @@ const ProductDetail: React.FC = () => {
               </div>
             )}
 
-            {/* Stepper + Buttons actions */}
+            {/* Action buttons — quantity is adjusted on the Cart page */}
             <div className="flex gap-4 items-center mt-4">
-              <div className="flex items-center border border-text-disabled rounded-input bg-surface">
-                <button
-                  onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                  className="p-2.5 text-text-secondary hover:text-text-primary transition-colors disabled:opacity-50"
-                  disabled={isOutOfStock || quantity <= 1}
-                >
-                  <Minus className="h-4 w-4" />
-                </button>
-                <span className="px-4 text-sm font-bold text-text-primary select-none w-10 text-center">
-                  {quantity}
-                </span>
-                <button
-                  onClick={() => setQuantity((q) => Math.min(selectedVariant?.stock || 1, q + 1))}
-                  className="p-2.5 text-text-secondary hover:text-text-primary transition-colors"
-                  disabled={isOutOfStock || quantity >= (selectedVariant?.stock || 1)}
-                >
-                  <Plus className="h-4 w-4" />
-                </button>
-              </div>
-
               <Button
                 variant="primary"
                 disabled={isOutOfStock}

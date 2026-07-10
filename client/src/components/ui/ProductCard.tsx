@@ -13,6 +13,8 @@ export interface ProductVariant {
   priceDeltaCents: number;
   costPriceCents: number;
   lowStockThreshold: number;
+  /** Optional variant-specific photo shown when the variant is selected */
+  image?: { url: string; publicId: string };
 }
 
 export interface ProductDoc {

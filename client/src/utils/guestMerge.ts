@@ -1,5 +1,6 @@
 import api from '../services/api.js';
 import { getGuestWishlist, clearGuestWishlist } from '../pages/Wishlist.js';
+import { getGuestCartItems, clearGuestCart } from './guestCart.js';
 
 type Toast = (message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
 
@@ -9,18 +10,15 @@ type Toast = (message: string, type: 'success' | 'error' | 'warning' | 'info') =
  */
 export const mergeGuestData = async (addToast: Toast) => {
   // Cart merge-on-login logic
-  const guestCartStored = localStorage.getItem('guest_cart');
-  if (guestCartStored) {
+  const guestCartItems = getGuestCartItems();
+  if (guestCartItems.length > 0) {
     try {
-      const parsed = JSON.parse(guestCartStored);
-      if (parsed && Array.isArray(parsed.items) && parsed.items.length > 0) {
-        await api.post('/cart/merge', { items: parsed.items });
-        addToast('Synchronized guest cart with your account.', 'success');
-      }
+      await api.post('/cart/merge', { items: guestCartItems });
+      addToast('Synchronized guest cart with your account.', 'success');
     } catch (mergeErr) {
       console.error('Guest cart merge failed:', mergeErr);
     } finally {
-      localStorage.removeItem('guest_cart');
+      clearGuestCart();
     }
   }
 

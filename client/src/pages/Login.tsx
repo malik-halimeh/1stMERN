@@ -41,7 +41,16 @@ const Login: React.FC = () => {
 
     setIsSubmitting(true);
     try {
-      await login(emailValue, passwordValue);
+      const sessionUser = await login(emailValue, passwordValue);
+
+      // Staff always land on the admin dashboard — never the storefront —
+      // and skip the guest cart/wishlist merge (a customer-only flow).
+      if (sessionUser.role === 'super_admin' || sessionUser.role === 'inventory_manager') {
+        addToast('Welcome back! You have logged in successfully.', 'success');
+        navigate('/admin/dashboard', { replace: true });
+        return;
+      }
+
       await mergeGuestData(addToast);
       await refreshShopData();
 
@@ -64,7 +73,14 @@ const Login: React.FC = () => {
   // Google sign-in — verified by Google, no code flow needed
   const handleGoogleCredential = async (credential: string) => {
     try {
-      await loginWithGoogle(credential);
+      const sessionUser = await loginWithGoogle(credential);
+
+      if (sessionUser.role === 'super_admin' || sessionUser.role === 'inventory_manager') {
+        addToast('Signed in with Google successfully.', 'success');
+        navigate('/admin/dashboard', { replace: true });
+        return;
+      }
+
       await mergeGuestData(addToast);
       await refreshShopData();
       addToast('Signed in with Google successfully.', 'success');

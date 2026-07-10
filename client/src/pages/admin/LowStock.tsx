@@ -43,7 +43,9 @@ const AdminLowStock = () => {
 
   const fetchAlerts = useCallback(async () => {
     try {
-      const res = await api.get('/low-stock');
+      // Server paginates (default 20) — request the max page size so the
+      // client-side search box actually covers the whole list
+      const res = await api.get('/low-stock?limit=100');
       setAlerts(res.data.data);
     } catch (err) {
       console.error('Failed to fetch low-stock alerts:', err);

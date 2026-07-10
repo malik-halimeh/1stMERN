@@ -6,6 +6,8 @@ import { DataTable, type Column } from '../../components/ui/DataTable';
 import Skeleton from '../../components/ui/Skeleton';
 import EmptyState from '../../components/ui/EmptyState';
 import SearchBox from '../../components/ui/SearchBox';
+import Button from '../../components/ui/Button';
+import Modal from '../../components/ui/Modal';
 import { getApiErrorMessage } from '../../utils/apiError';
 import { ShoppingBag } from 'lucide-react';
 
@@ -88,6 +90,13 @@ const AdminOrders = () => {
   // Managers and super admins can both advance order statuses
   const canAdvance = user?.role === 'inventory_manager' || user?.role === 'super_admin';
 
+  // Cancel/refund flow: staff must type a reason the customer will see
+  const [reasonTarget, setReasonTarget] = useState<{
+    order: OrderRow;
+    status: 'cancelled' | 'refunded';
+  } | null>(null);
+  const [reasonText, setReasonText] = useState('');
+
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
@@ -128,17 +137,39 @@ const AdminOrders = () => {
     setPage(1);
   };
 
-  const changeStatus = async (order: OrderRow, status: OrderStatus) => {
+  const changeStatus = async (order: OrderRow, status: OrderStatus, note?: string) => {
     setUpdatingId(order._id);
     try {
-      await api.patch(`/orders/${order._id}/status`, { status });
-      addToast(`Order ${order.orderNumber} moved to ${status}.`, 'success');
+      await api.patch(`/orders/${order._id}/status`, { status, note });
+      addToast(`Order ${order.orderNumber} moved to ${status}. Customer notified.`, 'success');
       refetchOrders();
     } catch (err) {
       addToast(getApiErrorMessage(err, 'Failed to update order status.'), 'error');
     } finally {
       setUpdatingId(null);
     }
+  };
+
+  // Cancel/refund go through the reason modal; everything else is immediate
+  const requestStatusChange = (order: OrderRow, status: OrderStatus) => {
+    if (status === 'cancelled' || status === 'refunded') {
+      setReasonText('');
+      setReasonTarget({ order, status });
+      return;
+    }
+    changeStatus(order, status);
+  };
+
+  const submitReason = async () => {
+    if (!reasonTarget) return;
+    const reason = reasonText.trim();
+    if (!reason) {
+      addToast('Please enter a reason — the customer will see it.', 'warning');
+      return;
+    }
+    const { order, status } = reasonTarget;
+    setReasonTarget(null);
+    await changeStatus(order, status, reason);
   };
 
   const columns: Column<OrderRow>[] = [
@@ -226,17 +257,17 @@ const AdminOrders = () => {
                 return (
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={() => changeStatus(row, 'confirmed')}
+                      onClick={() => requestStatusChange(row, 'confirmed')}
                       disabled={isBusy}
                       className="px-2.5 py-1.5 rounded-btn text-xs font-bold bg-primary text-white hover:bg-primary-dark disabled:opacity-50"
                     >
                       {isBusy ? 'Confirming…' : '✓ Confirm'}
                     </button>
                     <button
-                      onClick={() => changeStatus(row, 'cancelled')}
+                      onClick={() => requestStatusChange(row, 'cancelled')}
                       disabled={isBusy}
                       className="px-2 py-1.5 rounded-btn text-xs font-semibold text-danger border border-danger/30 hover:bg-danger-bg/10 disabled:opacity-50"
-                      title="Cancel order"
+                      title="Cancel order (a reason is required)"
                     >
                       ✕
                     </button>
@@ -249,7 +280,7 @@ const AdminOrders = () => {
                   value=""
                   disabled={isBusy}
                   onChange={(e) => {
-                    if (e.target.value) changeStatus(row, e.target.value as OrderStatus);
+                    if (e.target.value) requestStatusChange(row, e.target.value as OrderStatus);
                   }}
                   className="text-xs border border-text-disabled rounded-input px-2 py-1.5 bg-surface text-text-primary focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
                 >
@@ -336,6 +367,53 @@ const AdminOrders = () => {
           }}
         />
       )}
+
+      {/* Cancel / refund reason modal — the customer sees this text */}
+      <Modal
+        isOpen={!!reasonTarget}
+        onClose={() => setReasonTarget(null)}
+        title={
+          reasonTarget?.status === 'refunded'
+            ? `Refund order ${reasonTarget.order.orderNumber}`
+            : `Cancel order ${reasonTarget?.order.orderNumber ?? ''}`
+        }
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setReasonTarget(null)}>
+              Back
+            </Button>
+            <Button
+              variant="primary"
+              onClick={submitReason}
+              disabled={!reasonText.trim()}
+              className="!bg-danger hover:!bg-red-700"
+            >
+              {reasonTarget?.status === 'refunded' ? 'Refund Order' : 'Cancel Order'}
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-3">
+          <p className="text-sm text-text-secondary">
+            Enter the reason for this {reasonTarget?.status === 'refunded' ? 'refund' : 'cancellation'}.
+            The customer will see it in their notification, email, and order page.
+          </p>
+          <textarea
+            autoFocus
+            rows={4}
+            value={reasonText}
+            onChange={(e) => setReasonText(e.target.value)}
+            maxLength={500}
+            placeholder={
+              reasonTarget?.status === 'refunded'
+                ? 'e.g. Item arrived damaged — full refund issued.'
+                : 'e.g. Item is out of stock and cannot be restocked soon.'
+            }
+            className="w-full rounded-input border border-text-disabled bg-background px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+          <p className="text-caption text-text-muted text-right">{reasonText.length}/500</p>
+        </div>
+      </Modal>
     </div>
   );
 };

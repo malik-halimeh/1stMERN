@@ -14,6 +14,7 @@ import productEventsRouter from './productEvents.js';
 import { authenticate, authorize } from '../middleware/auth.js';
 import userRouter from './user.js'
 import analyticsRouter from './analytics.js'
+import notificationRouter from './notification.js'
 
 const router = Router();
 
@@ -63,6 +64,9 @@ router.use('/users', userRouter)
 
 // 14. analytics (super admin)
 router.use('/analytics', analyticsRouter)
+
+// 15. in-app notifications (order status updates, etc.)
+router.use('/notifications', notificationRouter)
 
 
 // Protected Stub Route to test access + RBAC (only accessible to Super Admins)

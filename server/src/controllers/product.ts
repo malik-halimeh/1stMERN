@@ -174,6 +174,28 @@ export const getProductsByIds = async (req: Request, res: Response, next: NextFu
   }
 };
 
+// Files parsed by the productUpload multer fields middleware
+type UploadedFilesMap = { [field: string]: Express.Multer.File[] } | undefined;
+
+// Upload variant image files and attach each to its variant: a variant whose
+// JSON carries `imageSlot: n` receives the n-th `variantImages` file. Variants
+// keeping an existing `image` object simply pass it through untouched.
+const attachVariantImages = async (
+  parsedVariants: any[],
+  variantImageFiles: Express.Multer.File[]
+) => {
+  const uploads: { url: string; publicId: string }[] = [];
+  for (const file of variantImageFiles) {
+    uploads.push(await uploadImageBuffer(file.buffer));
+  }
+  for (const v of parsedVariants) {
+    if (typeof v.imageSlot === 'number' && uploads[v.imageSlot]) {
+      v.image = uploads[v.imageSlot];
+    }
+    delete v.imageSlot;
+  }
+};
+
 // 4. POST /api/products - Manager Only (Multipart Cloudinary Upload)
 export const createProduct = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -225,8 +247,9 @@ export const createProduct = async (req: Request, res: Response, next: NextFunct
       parsedMeta = meta;
     }
 
-    // Process uploaded images via Multer buffer files
-    const imageFiles = req.files as Express.Multer.File[] | undefined;
+    // Process uploaded images via Multer buffer files (fields middleware)
+    const filesMap = req.files as UploadedFilesMap;
+    const imageFiles = filesMap?.images;
     const images: { url: string; publicId: string }[] = [];
 
     if (imageFiles && imageFiles.length > 0) {
@@ -235,6 +258,9 @@ export const createProduct = async (req: Request, res: Response, next: NextFunct
         images.push(result);
       }
     }
+
+    // Per-variant photos (optional, matched by imageSlot index)
+    await attachVariantImages(parsedVariants, filesMap?.variantImages || []);
 
     const basePrice = parseInt(basePriceCents);
     if (isNaN(basePrice) || basePrice < 0) {
@@ -335,6 +361,9 @@ export const updateProduct = async (req: Request, res: Response, next: NextFunct
 
     if (variants) {
       const parsedVariants = typeof variants === 'string' ? JSON.parse(variants) : variants;
+      // New variant photos arrive as multipart files alongside the JSON
+      const filesMap = req.files as UploadedFilesMap;
+      await attachVariantImages(parsedVariants, filesMap?.variantImages || []);
       product.variants = parsedVariants;
       isStockUpdated = true;
     }

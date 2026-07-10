@@ -19,6 +19,13 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB image limit
 });
 
+// Gallery images + one optional photo per variant. Multer passes JSON
+// requests through untouched, so the PATCH route still accepts plain JSON.
+const productUpload = upload.fields([
+  { name: 'images', maxCount: 5 },
+  { name: 'variantImages', maxCount: 20 },
+]);
+
 // Public endpoints
 router.get('/', getProducts);
 router.get('/by-ids', getProductsByIds); // Batch fetch by ObjectId array — public, no auth
@@ -29,11 +36,17 @@ router.post(
   '/',
   authenticate,
   authorize('inventory_manager', 'super_admin'),
-  upload.array('images', 5) as any, // Accept up to 5 uploaded images
+  productUpload as any,
   createProduct
 );
 
-router.patch('/:id', authenticate, authorize('inventory_manager', 'super_admin'), updateProduct);
+router.patch(
+  '/:id',
+  authenticate,
+  authorize('inventory_manager', 'super_admin'),
+  productUpload as any,
+  updateProduct
+);
 router.delete('/:id', authenticate, authorize('inventory_manager', 'super_admin'), deleteProduct);
 
 export default router;

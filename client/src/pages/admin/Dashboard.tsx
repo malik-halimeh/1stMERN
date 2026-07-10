@@ -82,8 +82,10 @@ const AdminDashboard = () => {
           api.get('/orders?limit=5'),
           api.get('/orders?status=pending&limit=1'),
           api.get('/products?limit=1'),
-          api.get('/low-stock'),
-          api.get('/coupons'),
+          // Both endpoints paginate at 20 by default — fetch the max page so
+          // the "active" tiles count the whole list, not just the first page
+          api.get('/low-stock?limit=100'),
+          api.get('/coupons?limit=100'),
         ]);
         setStats({
           totalOrders: orders.data.meta?.total ?? 0,

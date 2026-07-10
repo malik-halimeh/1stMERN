@@ -31,6 +31,7 @@ interface OrderDetails {
     country: string;
   };
   status: 'pending' | 'confirmed' | 'processing' | 'shipped' | 'delivered' | 'cancelled' | 'refunded';
+  statusHistory?: Array<{ status: string; timestamp: string; note?: string }>;
   feedback?: { rating: number; text: string; createdAt: string } | null;
   createdAt: string;
 }
@@ -84,6 +85,14 @@ const OrderDetail: React.FC = () => {
   };
 
   const currentStepIdx = getCurrentStepIndex();
+
+  // Staff-entered reason for a cancellation/refund (latest matching history note)
+  const terminalReason =
+    order && (order.status === 'cancelled' || order.status === 'refunded')
+      ? [...(order.statusHistory || [])]
+          .reverse()
+          .find((h) => h.status === order.status && h.note)?.note || ''
+      : '';
 
   const handleOpenReviewModal = (productId: string, name: string) => {
     setSelectedProductReview({ productId, name });
@@ -189,6 +198,31 @@ const OrderDetail: React.FC = () => {
                 )}
               </div>
             </div>
+
+            {/* Cancellation / refund reason from staff */}
+            {(order.status === 'cancelled' || order.status === 'refunded') && (
+              <div
+                className={`border rounded-card p-5 shadow-level1 ${
+                  order.status === 'cancelled'
+                    ? 'bg-danger-bg/10 border-danger/25'
+                    : 'bg-amber-50 border-amber-200'
+                }`}
+              >
+                <h3
+                  className={`text-xs font-bold uppercase tracking-wider mb-1.5 ${
+                    order.status === 'cancelled' ? 'text-danger' : 'text-amber-700'
+                  }`}
+                >
+                  {order.status === 'cancelled' ? 'Why was my order cancelled?' : 'Why was my order refunded?'}
+                </h3>
+                <p className="text-sm text-text-primary leading-relaxed">
+                  {terminalReason ||
+                    (order.status === 'cancelled'
+                      ? 'This order was cancelled by our team. Contact support for details.'
+                      : 'This order was refunded by our team. Contact support for details.')}
+                </p>
+              </div>
+            )}
 
             {/* Stepper Progress component */}
             {order.status !== 'cancelled' && order.status !== 'refunded' && (

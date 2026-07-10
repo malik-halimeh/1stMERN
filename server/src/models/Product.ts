@@ -1,5 +1,10 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
+export interface IImage {
+  url: string;
+  publicId: string;
+}
+
 export interface IVariant {
   sku: string;
   color?: string;
@@ -9,11 +14,8 @@ export interface IVariant {
   priceDeltaCents: number;
   costPriceCents: number;
   lowStockThreshold: number;
-}
-
-export interface IImage {
-  url: string;
-  publicId: string;
+  /** Optional variant-specific photo shown when the variant is selected */
+  image?: IImage;
 }
 
 export interface IMeta {
@@ -43,6 +45,11 @@ export interface IProduct extends Document {
   updatedAt: Date;
 }
 
+const ImageSchema = new Schema<IImage>({
+  url: { type: String, required: true },
+  publicId: { type: String, required: true },
+});
+
 const VariantSchema = new Schema<IVariant>({
   sku: { type: String, required: true, trim: true },
   color: { type: String, trim: true },
@@ -52,11 +59,7 @@ const VariantSchema = new Schema<IVariant>({
   priceDeltaCents: { type: Number, required: true, default: 0 },
   costPriceCents: { type: Number, required: true, min: 0 },
   lowStockThreshold: { type: Number, required: true, default: 10 },
-});
-
-const ImageSchema = new Schema<IImage>({
-  url: { type: String, required: true },
-  publicId: { type: String, required: true },
+  image: { type: ImageSchema, required: false },
 });
 
 const MetaSchema = new Schema<IMeta>({

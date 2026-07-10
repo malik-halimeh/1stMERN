@@ -120,17 +120,18 @@ const Home: React.FC = () => {
     fetchRecs();
   }, []);
 
-  // Add to Cart handler — updates the shared header badge count
+  // Add to Cart handler — updates the shared header badge count (guest + auth)
   const handleAddToCart = async (productId: string, variantSku: string) => {
     try {
-      await addItemToCart(productId, variantSku, 1);
-      addToast('Item added to your shopping cart!', 'success');
-    } catch (err: any) {
-      const msg = err.response?.data?.error?.message || 'Please log in to add items to your cart.';
-      addToast(msg, err.response?.status === 401 ? 'warning' : 'error');
-      if (err.response?.status === 401) {
-        navigate(`/login?redirect=${encodeURIComponent(window.location.pathname)}`);
+      const status = await addItemToCart(productId, variantSku, 1);
+      if (status === 'exists') {
+        addToast('This product is already in your cart.', 'info');
+      } else {
+        addToast('Product added to cart.', 'success');
       }
+    } catch (err: any) {
+      const msg = err.response?.data?.error?.message || err?.message || 'Could not add item to cart.';
+      addToast(msg, 'error');
     }
   };
 
@@ -164,7 +165,8 @@ const Home: React.FC = () => {
               <div className="absolute inset-0 bg-gradient-to-r from-primary-dark/95 via-primary-dark/80 to-transparent z-10" />
               <img src={slide.image} alt={slide.title} className="absolute right-0 top-0 h-full w-[50%] object-cover object-center" />
               
-              <div className="max-w-7xl mx-auto px-4 w-full z-25 relative text-left">
+              {/* z-20 keeps the copy above the z-10 gradient overlay (z-25 is not a Tailwind class) */}
+              <div className="max-w-7xl mx-auto px-4 w-full z-20 relative text-left">
                 <div className="max-w-xl flex flex-col items-start gap-4">
                   <span className="bg-accent text-white text-[10px] font-extrabold px-3 py-1 rounded-full uppercase tracking-wider">
                     Featured Collection
@@ -172,7 +174,7 @@ const Home: React.FC = () => {
                   <h2 className="text-4xl md:text-5xl font-extrabold text-white leading-tight">
                     {slide.title}
                   </h2>
-                  <p className="text-sm md:text-base text-text-muted">
+                  <p className="text-sm md:text-base text-white/80">
                     {slide.subtitle}
                   </p>
                   <Button

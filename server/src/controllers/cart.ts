@@ -137,30 +137,24 @@ export const addToCart = async (req: Request, res: Response, next: NextFunction)
       (item) => item.productId.toString() === productId && item.variantSku === variantSku
     );
 
-    if (existingItemIdx > -1) {
-      const newQty = cart.items[existingItemIdx].quantity + qty;
-      if (variant.stock < newQty) {
-        throw new AppError(
-          'INSUFFICIENT_STOCK',
-          `Cannot add quantity. Stock limit exceeded. Max available: ${variant.stock}`,
-          409
-        );
-      }
-      cart.items[existingItemIdx].quantity = newQty;
-      cart.items[existingItemIdx].priceAtAddCents = currentPrice;
-    } else {
+    const alreadyInCart = existingItemIdx > -1;
+
+    if (!alreadyInCart) {
+      // Only one row per product+variant: repeat adds leave the cart untouched
+      // and the client tells the user it is already there. Quantity is only
+      // changed from the Cart page (PATCH /cart/items/:productId).
       cart.items.push({
         productId: new mongoose.Types.ObjectId(productId),
         variantSku,
         quantity: qty,
         priceAtAddCents: currentPrice,
       });
+      await cart.save();
     }
-
-    await cart.save();
 
     res.status(200).json({
       success: true,
+      alreadyInCart,
       data: cart,
     });
   } catch (error) {

@@ -14,11 +14,11 @@ interface AuthContextType {
   setUser: React.Dispatch<React.SetStateAction<IUser | null>>;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<IUser>;
   register: (name: string, email: string, password: string) => Promise<{ requiresVerification: boolean; email: string }>;
-  verifyEmail: (email: string, code: string) => Promise<void>;
+  verifyEmail: (email: string, code: string) => Promise<IUser>;
   resendVerification: (email: string) => Promise<void>;
-  loginWithGoogle: (credential: string) => Promise<void>;
+  loginWithGoogle: (credential: string) => Promise<IUser>;
   logout: () => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
 }
@@ -113,23 +113,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     silentRefresh();
   }, [silentRefresh]);
 
-  // Apply a fresh session returned by login / verify-email / google
-  const applySession = (data: { accessToken: string; user: any }) => {
+  // Apply a fresh session returned by login / verify-email / google.
+  // Returns the user so callers can route by role immediately (state updates
+  // are async, so reading `user` right after login would still be stale).
+  const applySession = (data: { accessToken: string; user: any }): IUser => {
     sessionEpochRef.current += 1; // invalidate any in-flight silent refresh
     setAccessToken(data.accessToken);
-    setUser({
+    const sessionUser: IUser = {
       id: data.user.id,
       name: data.user.name,
       email: data.user.email,
       role: data.user.role,
       addresses: data.user.addresses || [],
-    });
+    };
+    setUser(sessionUser);
+    return sessionUser;
   };
 
   // 2. Login Flow
   const login = async (email: string, password: string) => {
     const response = await api.post('/auth/login', { email, password });
-    applySession(response.data.data);
+    return applySession(response.data.data);
   };
 
   // 3. Register Flow — creates a PENDING account; the emailed code must be
@@ -145,7 +149,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // 3b. Confirm the signup verification code → opens the session
   const verifyEmail = async (email: string, code: string) => {
     const response = await api.post('/auth/verify-email', { email, code });
-    applySession(response.data.data);
+    return applySession(response.data.data);
   };
 
   // 3c. Request a fresh verification code
@@ -156,7 +160,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // 3d. Google sign-in (GSI ID token) → opens the session
   const loginWithGoogle = async (credential: string) => {
     const response = await api.post('/auth/google', { credential });
-    applySession(response.data.data);
+    return applySession(response.data.data);
   };
 
   // 4. Logout Flow

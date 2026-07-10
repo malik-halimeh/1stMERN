@@ -222,8 +222,12 @@ const AccountDashboard: React.FC = () => {
   // Move wishlist item to cart — updates the shared cart badge
   const handleMoveToCart = async (productId: string, variantSku: string) => {
     try {
-      await addItemToCart(productId, variantSku, 1);
-      addToast('Product moved to shopping cart.', 'success');
+      const status = await addItemToCart(productId, variantSku, 1);
+      if (status === 'exists') {
+        addToast('This product is already in your cart.', 'info');
+      } else {
+        addToast('Product added to cart.', 'success');
+      }
       // Delete from wishlist
       await handleRemoveWishlistItem(productId);
     } catch (err: any) {

@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Search, User, Heart, ShoppingBag, X, Menu, ChevronDown, ChevronRight, Check, LogOut, LayoutDashboard } from 'lucide-react';
 import Breadcrumb from '../ui/Breadcrumb.js';
 import type { BreadcrumbItem } from '../ui/Breadcrumb.js';
+import NotificationBell from '../ui/NotificationBell.js';
 import { useAuth } from '../../context/AuthContext.js';
 import { useShop } from '../../context/ShopContext.js';
 import api from '../../services/api.js';
@@ -273,6 +274,9 @@ const StorefrontLayout: React.FC<StorefrontLayoutProps> = ({ children, breadcrum
 
           {/* Action Icons */}
           <div className="flex items-center gap-2 lg:gap-3 select-none">
+
+            {/* Order status notifications — signed-in users only */}
+            {isAuthenticated && <NotificationBell />}
 
             {/* ── User / Account / Logout ────────────────────────────────── */}
             {isAuthenticated && user ? (

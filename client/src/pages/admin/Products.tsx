@@ -11,13 +11,21 @@ import SearchBox from '../../components/ui/SearchBox';
 import { getApiErrorMessage } from '../../utils/apiError';
 import { Package, Plus, Trash2 } from 'lucide-react';
 
+interface VariantImage {
+  url: string;
+  publicId: string;
+}
+
 interface Variant {
   sku: string;
   color?: string;
+  size?: string;
+  capacity?: string;
   stock: number;
   priceDeltaCents: number;
   costPriceCents?: number;
   lowStockThreshold: number;
+  image?: VariantImage;
 }
 
 interface ProductRow {
@@ -43,10 +51,15 @@ interface CategoryOption {
 interface VariantForm {
   sku: string;
   color: string;
+  capacity: string;
+  size: string; // pass-through only (kept so edits don't erase it)
   stock: string;
   priceDelta: string; // dollars
   costPrice: string; // dollars
   lowStockThreshold: string;
+  imageFile: File | null; // newly chosen photo
+  existingImage: VariantImage | null; // photo already on the server
+  imagePreview: string; // object URL or existing URL for the thumbnail
 }
 
 interface ProductForm {
@@ -62,10 +75,15 @@ interface ProductForm {
 const EMPTY_VARIANT: VariantForm = {
   sku: '',
   color: '',
+  capacity: '',
+  size: '',
   stock: '0',
   priceDelta: '0',
   costPrice: '0',
   lowStockThreshold: '5',
+  imageFile: null,
+  existingImage: null,
+  imagePreview: '',
 };
 
 const EMPTY_FORM: ProductForm = {
@@ -170,10 +188,15 @@ const AdminProducts = () => {
       variants: p.variants.map((v) => ({
         sku: v.sku,
         color: v.color || '',
+        capacity: v.capacity || '',
+        size: v.size || '',
         stock: String(v.stock),
         priceDelta: (v.priceDeltaCents / 100).toFixed(2),
         costPrice: ((v.costPriceCents ?? 0) / 100).toFixed(2),
         lowStockThreshold: String(v.lowStockThreshold),
+        imageFile: null,
+        existingImage: v.image || null,
+        imagePreview: v.image?.url || '',
       })),
       images: [],
     });
@@ -187,50 +210,67 @@ const AdminProducts = () => {
     }));
   };
 
-  const buildVariantsPayload = () =>
-    form.variants
+  // Variants JSON + the new photo files. A variant with a fresh file gets an
+  // imageSlot index (the server matches slot n → n-th variantImages file);
+  // one keeping its stored photo passes the existing image object through.
+  const buildVariantsPayload = () => {
+    const files: File[] = [];
+    const variants = form.variants
       .filter((v) => v.sku.trim())
-      .map((v) => ({
-        sku: v.sku.trim(),
-        color: v.color.trim() || undefined,
-        stock: parseInt(v.stock) || 0,
-        priceDeltaCents: dollarsToCents(v.priceDelta),
-        costPriceCents: dollarsToCents(v.costPrice),
-        lowStockThreshold: parseInt(v.lowStockThreshold) || 0,
-      }));
+      .map((v) => {
+        const payload: Record<string, unknown> = {
+          sku: v.sku.trim(),
+          color: v.color.trim() || undefined,
+          capacity: v.capacity.trim() || undefined,
+          size: v.size.trim() || undefined,
+          stock: parseInt(v.stock) || 0,
+          priceDeltaCents: dollarsToCents(v.priceDelta),
+          costPriceCents: dollarsToCents(v.costPrice),
+          lowStockThreshold: parseInt(v.lowStockThreshold) || 0,
+        };
+        if (v.imageFile) {
+          payload.imageSlot = files.length;
+          files.push(v.imageFile);
+        } else if (v.existingImage) {
+          payload.image = v.existingImage;
+        }
+        return payload;
+      });
+    return { variants, files };
+  };
 
   const handleSave = async () => {
     if (!form.name.trim() || !form.description.trim() || !form.categoryId || !form.basePrice) {
       addToast('Name, description, category, and base price are required.', 'error');
       return;
     }
-    const variants = buildVariantsPayload();
+    const { variants, files: variantImageFiles } = buildVariantsPayload();
     if (variants.length === 0) {
       addToast('At least one variant with an SKU is required.', 'error');
       return;
     }
 
+    // Both create and update are multipart: variants ride as a JSON string
+    // beside the gallery images (create only) and per-variant photo files
+    const fd = new FormData();
+    fd.append('name', form.name);
+    if (form.brand) fd.append('brand', form.brand);
+    fd.append('description', form.description);
+    fd.append('categoryId', form.categoryId);
+    fd.append('basePriceCents', String(dollarsToCents(form.basePrice)));
+    fd.append('variants', JSON.stringify(variants));
+    for (const file of variantImageFiles) {
+      fd.append('variantImages', file);
+    }
+
     setSaving(true);
     try {
       if (editingProduct) {
-        await api.patch(`/products/${editingProduct._id}`, {
-          name: form.name,
-          brand: form.brand || undefined,
-          description: form.description,
-          categoryId: form.categoryId,
-          basePriceCents: dollarsToCents(form.basePrice),
-          variants,
+        await api.patch(`/products/${editingProduct._id}`, fd, {
+          headers: { 'Content-Type': 'multipart/form-data' },
         });
         addToast(`Product "${form.name}" updated.`, 'success');
       } else {
-        // Create is multipart: variants ride as a JSON string beside image files
-        const fd = new FormData();
-        fd.append('name', form.name);
-        if (form.brand) fd.append('brand', form.brand);
-        fd.append('description', form.description);
-        fd.append('categoryId', form.categoryId);
-        fd.append('basePriceCents', String(dollarsToCents(form.basePrice)));
-        fd.append('variants', JSON.stringify(variants));
         for (const file of form.images.slice(0, 5)) {
           fd.append('images', file);
         }
@@ -521,7 +561,7 @@ const AdminProducts = () => {
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                     <div>
                       <label className="block text-label text-text-secondary mb-1">SKU *</label>
                       <input
@@ -540,11 +580,21 @@ const AdminProducts = () => {
                         placeholder="e.g. White"
                       />
                     </div>
+                    <div>
+                      <label className="block text-label text-text-secondary mb-1">Capacity</label>
+                      <input
+                        className={inputClass}
+                        value={v.capacity}
+                        onChange={(e) => setVariant(idx, { capacity: e.target.value })}
+                        placeholder="e.g. 500L"
+                      />
+                    </div>
                   </div>
 
+                  {/* Short one-line labels keep the four inputs aligned */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     <div>
-                      <label className="block text-label text-text-secondary mb-1">Stock</label>
+                      <label className="block text-label text-text-secondary mb-1 whitespace-nowrap">Stock</label>
                       <input
                         type="number"
                         min="0"
@@ -555,8 +605,8 @@ const AdminProducts = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-label text-text-secondary mb-1">
-                        Price delta ($)
+                      <label className="block text-label text-text-secondary mb-1 whitespace-nowrap">
+                        Price Δ ($)
                       </label>
                       <input
                         type="number"
@@ -568,8 +618,8 @@ const AdminProducts = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-label text-text-secondary mb-1">
-                        Cost price ($)
+                      <label className="block text-label text-text-secondary mb-1 whitespace-nowrap">
+                        Cost ($)
                       </label>
                       <input
                         type="number"
@@ -582,8 +632,8 @@ const AdminProducts = () => {
                       />
                     </div>
                     <div>
-                      <label className="block text-label text-text-secondary mb-1">
-                        Low-stock alert
+                      <label className="block text-label text-text-secondary mb-1 whitespace-nowrap">
+                        Low stock
                       </label>
                       <input
                         type="number"
@@ -593,6 +643,47 @@ const AdminProducts = () => {
                         onChange={(e) => setVariant(idx, { lowStockThreshold: e.target.value })}
                         placeholder="5"
                       />
+                    </div>
+                  </div>
+
+                  {/* Per-variant photo (shown on the storefront when the variant is selected) */}
+                  <div>
+                    <label className="block text-label text-text-secondary mb-1">
+                      Variant image
+                    </label>
+                    <div className="flex items-center gap-3">
+                      {v.imagePreview && (
+                        <img
+                          src={v.imagePreview}
+                          alt={`Variant ${idx + 1}`}
+                          className="h-12 w-12 rounded-lg object-cover border border-dashboard-section-bg bg-surface flex-shrink-0"
+                        />
+                      )}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0] || null;
+                          setVariant(idx, {
+                            imageFile: file,
+                            imagePreview: file
+                              ? URL.createObjectURL(file)
+                              : v.existingImage?.url || '',
+                          });
+                        }}
+                        className="block w-full text-sm text-text-secondary file:mr-3 file:rounded-btn file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white hover:file:bg-primary-dark"
+                      />
+                      {(v.imageFile || v.existingImage) && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setVariant(idx, { imageFile: null, existingImage: null, imagePreview: '' })
+                          }
+                          className="text-xs font-semibold text-text-muted hover:text-danger whitespace-nowrap"
+                        >
+                          Remove image
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>

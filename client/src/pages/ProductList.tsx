@@ -10,7 +10,6 @@ import EmptyState from '../components/ui/EmptyState.js';
 import { useToast } from '../context/ToastContext.js';
 import { useAuth } from '../context/AuthContext.js';
 import { useShop } from '../context/ShopContext.js';
-import axios from 'axios';
 import api from '../services/api.js';
 import { getApiErrorMessage } from '../utils/apiError.js';
 import { Filter, SlidersHorizontal, ChevronLeft, ChevronRight, Star, X } from 'lucide-react';
@@ -149,18 +148,17 @@ const ProductList: React.FC = () => {
     setSearchParams(new URLSearchParams());
   };
 
-  // Add to Cart handler — updates the shared header badge count
+  // Add to Cart handler — updates the shared header badge count (guest + auth)
   const handleAddToCart = async (productId: string, variantSku: string) => {
     try {
-      await addItemToCart(productId, variantSku, 1);
-      addToast('Item added to your shopping cart!', 'success');
-    } catch (err) {
-      const status = axios.isAxiosError(err) ? err.response?.status : undefined;
-      const msg = getApiErrorMessage(err, 'Please log in to add items to your cart.');
-      addToast(msg, status === 401 ? 'warning' : 'error');
-      if (status === 401) {
-        navigate(`/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`);
+      const status = await addItemToCart(productId, variantSku, 1);
+      if (status === 'exists') {
+        addToast('This product is already in your cart.', 'info');
+      } else {
+        addToast('Product added to cart.', 'success');
       }
+    } catch (err) {
+      addToast(getApiErrorMessage(err, 'Could not add item to cart.'), 'error');
     }
   };
 

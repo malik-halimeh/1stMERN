@@ -128,19 +128,18 @@ const Wishlist: React.FC = () => {
     }
   };
 
-  // ── Move to cart — updates the shared cart badge ───────────────────────────
+  // ── Move to cart — updates the shared cart badge (guest + auth) ────────────
   const handleMoveToCart = async (productId: string, variantSku: string) => {
-    if (!user) {
-      addToast('Please sign in to add items to your cart.', 'warning');
-      navigate('/login?redirect=/wishlist');
-      return;
-    }
     try {
-      await addItemToCart(productId, variantSku, 1);
-      addToast('Product added to shopping cart.', 'success');
+      const status = await addItemToCart(productId, variantSku, 1);
+      if (status === 'exists') {
+        addToast('This product is already in your cart.', 'info');
+      } else {
+        addToast('Product added to cart.', 'success');
+      }
       await handleRemove(productId);
     } catch (err: any) {
-      const msg = err.response?.data?.error?.message || 'Could not move item to cart.';
+      const msg = err.response?.data?.error?.message || err?.message || 'Could not move item to cart.';
       addToast(msg, 'error');
     }
   };

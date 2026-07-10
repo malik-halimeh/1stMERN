@@ -108,9 +108,36 @@ const AdminContentRoute: React.FC<{
 // App — routing tree
 // --------------------------------------------------------------------------
 
-function App() {
+/**
+ * Staff (super admins & inventory managers) never browse the storefront:
+ * any non-/admin path bounces them straight to the admin dashboard.
+ */
+const StaffGate: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user, isLoading } = useAuth();
+  const { pathname } = useLocation();
+
+  if (
+    !isLoading &&
+    user &&
+    (user.role === 'super_admin' || user.role === 'inventory_manager') &&
+    !pathname.startsWith('/admin')
+  ) {
+    return <Navigate to="/admin/dashboard" replace />;
+  }
+
+  return <>{children}</>;
+};
+
+/**
+ * Routes wrapped in a keyed container so every pathname change replays a
+ * short fade-slide entrance (see .page-transition in index.css).
+ */
+const AppRoutes: React.FC = () => {
+  const { pathname } = useLocation();
+
   return (
-    <Router>
+    <StaffGate>
+      <div key={pathname} className="page-transition">
       <Routes>
         {/* ── Storefront Routes ── */}
         <Route path="/" element={<Home />} />
@@ -258,6 +285,15 @@ function App() {
         {/* Catch-all → home */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </div>
+    </StaffGate>
+  );
+};
+
+function App() {
+  return (
+    <Router>
+      <AppRoutes />
     </Router>
   );
 }
