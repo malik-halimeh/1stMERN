@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Search, User, Heart, ShoppingBag, X, Menu, ChevronDown, ChevronRight, Check, LogOut, LayoutDashboard } from 'lucide-react';
+import { User, Heart, ShoppingBag, X, Menu, ChevronDown, ChevronRight, LogOut, LayoutDashboard } from 'lucide-react';
 import Breadcrumb from '../ui/Breadcrumb.js';
 import type { BreadcrumbItem } from '../ui/Breadcrumb.js';
 import NotificationBell from '../ui/NotificationBell.js';
@@ -13,51 +13,39 @@ interface StorefrontLayoutProps {
   breadcrumbs?: BreadcrumbItem[];
 }
 
-
-
-const CATEGORIES = [
-  {
-    name: 'Major Appliances',
-    subcategories: ['Refrigerators', 'Ranges & Ovens', 'Dishwashers', 'Washers & Dryers'],
-    featured: [
-      { id: '1', name: 'French Door Refrigerator', price: '$1,899.00', image: '🧊' },
-      { id: '2', name: 'Smart Induction Range', price: '$1,249.00', image: '🍳' }
-    ]
-  },
-  {
-    name: 'Small Appliances',
-    subcategories: ['Microwaves', 'Coffee Makers', 'Blenders & Juicers', 'Toasters & Ovens'],
-    featured: [
-      { id: '6', name: 'Espresso Bar Coffee Machine', price: '$599.00', image: '☕' },
-      { id: '7', name: 'Professional Blender', price: '$189.00', image: '🥤' }
-    ]
-  }
-];
-
-interface SuggestionProduct {
-  id: string;
-  slug: string;
+// Real categories fetched from the API (GET /categories) — the nav links use
+// their slugs, which is what the shop page's ?category= filter expects
+interface NavCategory {
+  _id: string;
   name: string;
-  category: string;
-  price: string;
-  available: boolean;
-  thumbnail: string;
+  slug: string;
+  subcategories?: { _id: string; name: string; slug: string }[];
 }
 
 const StorefrontLayout: React.FC<StorefrontLayoutProps> = ({ children, breadcrumbs }) => {
   // Announcement Bar State
   const [showAnnounce, setShowAnnounce] = useState(true);
 
-  // Search Live Suggestion States
-  const [searchQuery, setSearchQuery] = useState('');
-  const [suggestions, setSuggestions] = useState<SuggestionProduct[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const searchContainerRef = useRef<HTMLDivElement>(null);
-
-  // Mega Menu Hover State
+  // Category nav — live data + hover dropdown state (keyed by category id)
+  const [categories, setCategories] = useState<NavCategory[]>([]);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    api
+      .get('/categories')
+      .then((res) => {
+        if (res.data?.success) setCategories(res.data.data || []);
+      })
+      .catch((err) => console.error('Failed to load nav categories:', err));
+  }, []);
+
+  const goToCategory = (slug: string) => {
+    setActiveCategory(null);
+    setIsMobileMenuOpen(false);
+    navigate(`/products?category=${encodeURIComponent(slug)}`);
+  };
 
   // Auth state
   const { user, isAuthenticated, logout } = useAuth();
@@ -112,69 +100,6 @@ const StorefrontLayout: React.FC<StorefrontLayoutProps> = ({ children, breadcrum
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [expandedMobileCategory, setExpandedMobileCategory] = useState<string | null>(null);
 
-  // Close search suggestions on click outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (searchContainerRef.current && !searchContainerRef.current.contains(event.target as Node)) {
-        setShowSuggestions(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  // Update suggestions on search query change (Debounced 300ms API query)
-  useEffect(() => {
-    if (!searchQuery.trim()) {
-      setSuggestions([]);
-      return;
-    }
-
-    const delayDebounceFn = setTimeout(async () => {
-      try {
-        const response = await api.get(`/products?search=${encodeURIComponent(searchQuery)}&limit=5&inStock=1`);
-        if (response.data?.success) {
-          const mapped = response.data.data.map((p: any) => {
-            const defaultVariant = p.variants?.[0];
-            const currentPrice = defaultVariant ? p.basePriceCents + defaultVariant.priceDeltaCents : p.basePriceCents;
-            return {
-              id: p._id,
-              slug: p.slug,
-              name: p.name,
-              category: p.brand || 'Appliance',
-              price: `$${(currentPrice / 100).toFixed(2)}`,
-              available: p.variants?.some((v: any) => v.stock > 0),
-              thumbnail: p.images?.[0]?.url || '',
-            };
-          });
-          setSuggestions(mapped);
-        }
-      } catch (err) {
-        console.error('Debounced suggestions fetch failed:', err);
-      }
-    }, 300);
-
-    return () => clearTimeout(delayDebounceFn);
-  }, [searchQuery]);
-
-  // Helper function to highlight matching search text
-  const renderHighlightedText = (text: string, highlight: string) => {
-    if (!highlight.trim()) return <span>{text}</span>;
-    const regex = new RegExp(`(${highlight})`, 'gi');
-    const parts = text.split(regex);
-    return (
-      <span>
-        {parts.map((part, i) =>
-          part.toLowerCase() === highlight.toLowerCase() ? (
-            <mark key={i} className="bg-amber-100 text-text-primary font-semibold">{part}</mark>
-          ) : (
-            <span key={i}>{part}</span>
-          )
-        )}
-      </span>
-    );
-  };
-
   return (
     <div className="min-h-screen flex flex-col bg-background text-text-primary font-sans">
       {/* 1. Announcement Bar */}
@@ -190,10 +115,9 @@ const StorefrontLayout: React.FC<StorefrontLayoutProps> = ({ children, breadcrum
         </div>
       )}
 
-      {/* 2. Sticky Header */}
+      {/* 2. Sticky Header — single slim row: logo, category nav, actions */}
       <header className="sticky top-0 z-40 bg-surface border-b border-dashboard-section-bg shadow-level1">
-        {/* Row 1: Main Bar */}
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between gap-4">
+        <div className="max-w-7xl mx-auto px-4 py-2.5 flex items-center gap-6">
           {/* Logo & Mobile Menu Toggle */}
           <div className="flex items-center gap-4">
             <button
@@ -207,73 +131,75 @@ const StorefrontLayout: React.FC<StorefrontLayoutProps> = ({ children, breadcrum
             </Link>
           </div>
 
-          {/* Search Bar w/ Live Suggestions */}
-          <div ref={searchContainerRef} className="hidden md:block flex-grow max-w-xl relative">
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Search appliances (e.g. refrigerator, coffee)..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onFocus={() => setShowSuggestions(true)}
-                className="w-full pl-10 pr-4 py-2 border border-text-disabled rounded-input bg-surface text-body placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all"
-              />
-              <Search className="absolute left-3.5 top-3 h-4.5 w-4.5 text-text-muted" />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-3.5 top-3 text-text-muted hover:text-text-secondary"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              )}
-            </div>
+          {/* Category Nav (desktop) — real categories, compact hover dropdowns */}
+          <nav className="hidden lg:flex items-center gap-1 flex-grow select-none">
+            <Link
+              to="/products"
+              className="px-3 py-2 rounded-btn text-sm font-semibold text-text-secondary hover:text-primary hover:bg-dashboard-section-bg transition-colors"
+            >
+              All Products
+            </Link>
 
-            {/* Suggestions Dropdown */}
-            {showSuggestions && suggestions.length > 0 && (
-              <div className="absolute left-0 right-0 mt-2 bg-surface border border-text-disabled rounded-dropdown shadow-level2 overflow-hidden z-50">
-                <div className="p-2 border-b border-dashboard-section-bg bg-background text-caption text-text-muted font-medium">
-                  Search Suggestions ({suggestions.length})
-                </div>
-                <ul className="divide-y divide-dashboard-section-bg max-h-80 overflow-y-auto">
-                  {suggestions.map((product) => (
-                    <li key={product.id}>
-                      <Link
-                        to={`/products/${product.slug}`}
-                        onClick={() => { setShowSuggestions(false); setSearchQuery(''); }}
-                        className="flex items-center gap-4 p-3 hover:bg-dashboard-section-bg transition-colors"
+            {categories.map((cat) => {
+              const isOpen = activeCategory === cat._id;
+              const hasSubs = (cat.subcategories?.length ?? 0) > 0;
+              return (
+                /* py-3/-my-3 bridges the hover gap between button and panel;
+                   handleMenuLeave adds a 180 ms close delay on top */
+                <div
+                  key={cat._id}
+                  className="relative py-3 -my-3"
+                  onMouseEnter={() => hasSubs && handleMenuEnter(cat._id)}
+                  onMouseLeave={handleMenuLeave}
+                >
+                  <button
+                    onClick={() => goToCategory(cat.slug)}
+                    className={`flex items-center gap-1 px-3 py-2 rounded-btn text-sm font-semibold transition-colors ${
+                      isOpen
+                        ? 'text-primary bg-primary/5'
+                        : 'text-text-secondary hover:text-primary hover:bg-dashboard-section-bg'
+                    }`}
+                    aria-haspopup={hasSubs}
+                    aria-expanded={isOpen}
+                  >
+                    <span>{cat.name}</span>
+                    {hasSubs && (
+                      <ChevronDown
+                        className={`h-3.5 w-3.5 transition-transform duration-200 ${
+                          isOpen ? 'rotate-180' : ''
+                        }`}
+                      />
+                    )}
+                  </button>
+
+                  {isOpen && hasSubs && (
+                    <div className="absolute left-0 top-full w-60 bg-surface border border-dashboard-section-bg rounded-dropdown shadow-level3 py-2 z-50 animate-scale-in">
+                      <button
+                        onClick={() => goToCategory(cat.slug)}
+                        className="w-full text-left px-4 py-2 text-sm font-bold text-primary hover:bg-dashboard-section-bg transition-colors"
                       >
-                        {product.thumbnail ? (
-                          <img src={product.thumbnail} className="w-10 h-10 object-cover rounded-image flex-shrink-0" />
-                        ) : (
-                          <span className="text-2xl p-1.5 bg-background rounded-image flex-shrink-0">🧊</span>
-                        )}
-                        <div className="flex-grow min-w-0">
-                          <p className="text-sm font-medium text-text-primary truncate">
-                            {renderHighlightedText(product.name, searchQuery)}
-                          </p>
-                          <span className="text-caption text-text-muted">{product.category}</span>
-                        </div>
-                        <div className="text-right flex-shrink-0">
-                          <p className="text-sm font-semibold text-primary">{product.price}</p>
-                          {product.available ? (
-                            <span className="text-caption text-success font-medium flex items-center justify-end gap-1">
-                              <Check className="h-3 w-3" /> In Stock
-                            </span>
-                          ) : (
-                            <span className="text-caption text-danger font-medium">Out of Stock</span>
-                          )}
-                        </div>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
+                        All {cat.name}
+                      </button>
+                      <div className="my-1 border-t border-dashboard-section-bg" />
+                      {cat.subcategories!.map((sub) => (
+                        <button
+                          key={sub._id}
+                          onClick={() => goToCategory(sub.slug)}
+                          className="w-full text-left px-4 py-2 text-sm text-text-secondary hover:bg-dashboard-section-bg hover:text-primary transition-colors flex items-center justify-between group/item"
+                        >
+                          <span>{sub.name}</span>
+                          <ChevronRight className="h-3.5 w-3.5 text-text-muted opacity-0 group-hover/item:opacity-100 transition-opacity" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </nav>
 
           {/* Action Icons */}
-          <div className="flex items-center gap-2 lg:gap-3 select-none">
+          <div className="flex items-center gap-2 lg:gap-3 select-none ml-auto">
 
             {/* Order status notifications — signed-in users only */}
             {isAuthenticated && <NotificationBell />}
@@ -374,106 +300,6 @@ const StorefrontLayout: React.FC<StorefrontLayoutProps> = ({ children, breadcrum
           </div>
 
         </div>
-
-        {/* Row 2: Category Nav w/ Mega Menu (Desktop only) */}
-        <div className="hidden lg:block border-t border-dashboard-section-bg">
-          <div className="max-w-7xl mx-auto px-4">
-            <nav className="flex items-center gap-8 py-3 select-none">
-              {CATEGORIES.map((category) => (
-                /*
-                 * HOVER-STABILITY FIX:
-                 * pt-3 extends the wrapper's hit-area downward to bridge the gap
-                 * between the trigger button and the absolutely-positioned panel,
-                 * so mouseleave doesn't fire while the cursor travels that gap.
-                 * The debounced handleMenuLeave adds a 180 ms safety window on top.
-                 */
-                <div
-                  key={category.name}
-                  className="relative pt-3 -mt-3" // pt-3/-mt-3 bridge: extends bounding box without shifting layout
-                  onMouseEnter={() => handleMenuEnter(category.name)}
-                  onMouseLeave={handleMenuLeave}
-                >
-                  <button
-                    className="flex items-center gap-1.5 text-secondary text-sm font-semibold text-text-secondary hover:text-primary transition-colors py-1"
-                    aria-haspopup="true"
-                    aria-expanded={activeCategory === category.name}
-                  >
-                    <span>{category.name}</span>
-                    <ChevronDown
-                      className={`h-4 w-4 transition-transform duration-200 ${
-                        activeCategory === category.name ? 'rotate-180' : ''
-                      }`}
-                    />
-                  </button>
-
-                  {/* Mega Menu Panel — top-full flush against the button, inside
-                      the wrapper's padded hit-area so no dead zone exists */}
-                  {activeCategory === category.name && (
-                    <div className="absolute left-0 top-full w-[720px] bg-surface border border-text-disabled rounded-dropdown shadow-level3 z-50 p-6 flex gap-6 animate-scale-in">
-                      {/* Left: Category description */}
-                      <div className="w-1/3 border-r border-dashboard-section-bg pr-6">
-                        <h4 className="text-sm font-bold text-primary-dark uppercase tracking-wider mb-2">
-                          {category.name}
-                        </h4>
-                        <p className="text-caption text-text-secondary">
-                          Explore our collection of premium quality appliances for your home.
-                        </p>
-                      </div>
-
-                      {/* Middle: Subcategories — button + navigate for SPA nav + menu close */}
-                      <div className="w-1/3">
-                        <h5 className="text-caption font-bold text-text-muted uppercase tracking-wider mb-3">
-                          Subcategories
-                        </h5>
-                        <ul className="flex flex-col gap-2">
-                          {category.subcategories.map((sub) => (
-                            <li key={sub}>
-                              <button
-                                onClick={() => {
-                                  setActiveCategory(null);
-                                  navigate(`/products?category=${encodeURIComponent(sub)}`);
-                                }}
-                                className="w-full text-left text-sm text-text-secondary hover:text-primary flex items-center justify-between group/item"
-                              >
-                                <span>{sub}</span>
-                                <ChevronRight className="h-3.5 w-3.5 text-text-muted opacity-0 group-hover/item:opacity-100 transition-opacity" />
-                              </button>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-
-                      {/* Right: Featured Products */}
-                      <div className="w-1/3 bg-dashboard-section-bg/40 rounded-card p-4">
-                        <h5 className="text-caption font-bold text-text-muted uppercase tracking-wider mb-3">
-                          Featured Products
-                        </h5>
-                        <div className="flex flex-col gap-3">
-                          {category.featured.map((feat) => (
-                            <button
-                              key={feat.id}
-                              onClick={() => {
-                                setActiveCategory(null);
-                                navigate(`/products/${feat.id}`);
-                              }}
-                              className="w-full text-left flex items-center gap-3 p-2 bg-surface rounded-image hover:shadow-level1 transition-shadow"
-                            >
-                              <span className="text-2xl">{feat.image}</span>
-                              <div className="min-w-0">
-                                <p className="text-xs font-semibold text-text-primary truncate">{feat.name}</p>
-                                <span className="text-xs text-primary font-bold">{feat.price}</span>
-                              </div>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </nav>
-          </div>
-        </div>
       </header>
 
       {/* 3. Mobile Slide-out Menu */}
@@ -494,43 +320,51 @@ const StorefrontLayout: React.FC<StorefrontLayoutProps> = ({ children, breadcrum
 
             {/* Mobile Navigation Content */}
             <div className="flex-grow overflow-y-auto p-4 flex flex-col gap-4">
-              {/* Search Bar for Mobile */}
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Search appliances..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-text-disabled rounded-input bg-surface text-body focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary"
-                />
-                <Search className="absolute left-3.5 top-3 h-4.5 w-4.5 text-text-muted" />
-              </div>
-
-              {/* Category Tree Links */}
+              {/* Category Tree Links — same live categories as the desktop nav */}
               <div>
                 <h4 className="text-caption font-bold text-text-muted uppercase tracking-wider mb-2">Categories</h4>
                 <div className="flex flex-col gap-1">
-                  {CATEGORIES.map((category) => {
-                    const isExpanded = expandedMobileCategory === category.name;
+                  <button
+                    onClick={() => {
+                      setIsMobileMenuOpen(false);
+                      navigate('/products');
+                    }}
+                    className="w-full text-left text-sm font-semibold text-text-secondary hover:text-primary border-b border-dashboard-section-bg py-2.5"
+                  >
+                    All Products
+                  </button>
+                  {categories.map((cat) => {
+                    const isExpanded = expandedMobileCategory === cat._id;
+                    const hasSubs = (cat.subcategories?.length ?? 0) > 0;
                     return (
-                      <div key={category.name} className="border-b border-dashboard-section-bg py-2">
-                        <button
-                          onClick={() => setExpandedMobileCategory(isExpanded ? null : category.name)}
-                          className="w-full flex items-center justify-between text-secondary text-sm font-semibold text-text-secondary"
-                        >
-                          <span>{category.name}</span>
-                          <ChevronDown className={`h-4 w-4 transform transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                        </button>
-                        {isExpanded && (
-                          <ul className="mt-2 ml-4 flex flex-col gap-2 border-l border-text-disabled pl-3">
-                            {category.subcategories.map((sub) => (
-                              <li key={sub}>
-                                <a
-                                  href={`/category/${sub.toLowerCase().replace(/ & /g, '-')}`}
-                                  className="text-sm text-text-secondary hover:text-primary py-1 block"
+                      <div key={cat._id} className="border-b border-dashboard-section-bg py-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <button
+                            onClick={() => goToCategory(cat.slug)}
+                            className="flex-grow text-left text-sm font-semibold text-text-secondary hover:text-primary py-0.5"
+                          >
+                            {cat.name}
+                          </button>
+                          {hasSubs && (
+                            <button
+                              onClick={() => setExpandedMobileCategory(isExpanded ? null : cat._id)}
+                              className="p-1.5 text-text-muted hover:text-text-primary rounded-btn hover:bg-dashboard-section-bg"
+                              aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${cat.name}`}
+                            >
+                              <ChevronDown className={`h-4 w-4 transform transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                            </button>
+                          )}
+                        </div>
+                        {isExpanded && hasSubs && (
+                          <ul className="mt-2 ml-1 flex flex-col border-l border-text-disabled pl-3">
+                            {cat.subcategories!.map((sub) => (
+                              <li key={sub._id}>
+                                <button
+                                  onClick={() => goToCategory(sub.slug)}
+                                  className="w-full text-left text-sm text-text-secondary hover:text-primary py-1.5 block"
                                 >
-                                  {sub}
-                                </a>
+                                  {sub.name}
+                                </button>
                               </li>
                             ))}
                           </ul>

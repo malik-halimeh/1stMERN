@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Navigate, BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 
 // Layouts
@@ -134,6 +134,12 @@ const StaffGate: React.FC<{ children: React.ReactNode }> = ({ children }) => {
  */
 const AppRoutes: React.FC = () => {
   const { pathname } = useLocation();
+
+  // SPA navigation keeps the previous page's scroll position — every new
+  // page (cart, wishlist, product detail, …) must start at the top instead
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pathname]);
 
   return (
     <StaffGate>
