@@ -131,12 +131,21 @@ const ProductList: React.FC = () => {
     setSearchParams(newParams);
   };
 
+  // Price inputs only accept zero or positive numbers (blocks "-5", "-" …)
+  const sanitizePrice = (value: string): string | null => {
+    if (value === '') return '';
+    const num = parseFloat(value);
+    return !isNaN(num) && num >= 0 ? value : null;
+  };
+
   const handleApplyPriceFilter = (e: React.FormEvent) => {
     e.preventDefault();
     const newParams = new URLSearchParams(searchParams);
-    if (minPriceInput) newParams.set('minPrice', minPriceInput);
+    const min = parseFloat(minPriceInput);
+    const max = parseFloat(maxPriceInput);
+    if (!isNaN(min) && min >= 0) newParams.set('minPrice', String(min));
     else newParams.delete('minPrice');
-    if (maxPriceInput) newParams.set('maxPrice', maxPriceInput);
+    if (!isNaN(max) && max >= 0) newParams.set('maxPrice', String(max));
     else newParams.delete('maxPrice');
     newParams.set('page', '1');
     setSearchParams(newParams);
@@ -214,18 +223,26 @@ const ProductList: React.FC = () => {
           <Input
             id="min-price"
             type="number"
+            min={0}
             placeholder="Min"
             value={minPriceInput}
-            onChange={(e) => setMinPriceInput(e.target.value)}
+            onChange={(e) => {
+              const v = sanitizePrice(e.target.value);
+              if (v !== null) setMinPriceInput(v);
+            }}
             className="w-full text-xs"
           />
           <span className="text-text-muted">-</span>
           <Input
             id="max-price"
             type="number"
+            min={0}
             placeholder="Max"
             value={maxPriceInput}
-            onChange={(e) => setMaxPriceInput(e.target.value)}
+            onChange={(e) => {
+              const v = sanitizePrice(e.target.value);
+              if (v !== null) setMaxPriceInput(v);
+            }}
             className="w-full text-xs"
           />
           <Button type="submit" variant="secondary" className="px-3 text-xs py-1.5 border border-dashboard-section-bg hover:bg-dashboard-section-bg/50">
