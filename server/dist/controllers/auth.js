@@ -6,13 +6,19 @@ import { generateAccessToken, generateRefreshToken, hashString } from '../utils/
 import { AppError } from '../utils/errors.js';
 import { sendVerificationCodeEmail, sendPasswordResetCodeEmail } from '../services/mailer.js';
 import { RegisterValidator, LoginValidator, ForgotPasswordValidator, ResetPasswordValidator, } from '../validators/auth.js';
-// Helper cookie settings matching the security specification
-const getCookieOptions = () => ({
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
-});
+// Helper cookie settings matching the security specification.
+// In production the client (static site) and API run on different onrender.com
+// subdomains — the browser treats that as cross-site, so the refresh cookie must
+// be SameSite=None; Secure or it will not be sent. Locally we keep Strict.
+const getCookieOptions = () => {
+    const isProd = process.env.NODE_ENV === 'production';
+    return {
+        httpOnly: true,
+        secure: isProd, // required by SameSite=None; Render serves over HTTPS
+        sameSite: (isProd ? 'none' : 'strict'),
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
+    };
+};
 const VERIFICATION_CODE_TTL_MS = 15 * 60 * 1000; // 15 minutes
 // Generate a 6-digit code, store its hash on the user, and email it
 const issueVerificationCode = async (user) => {

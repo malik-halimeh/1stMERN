@@ -1,0 +1,51 @@
+Issue Type,Issue ID,Parent ID,Summary,Description,Assignee,Story Points,Status,Time Spent
+Story,1,,Project foundation and environment setup,"Monorepo, tooling, server skeleton, database connection, and design tokens.",malik,,Done,
+Sub-task,101,1,Initialize monorepo with client/server workspaces and tooling,"npm workspaces, ESLint, Prettier, TypeScript configs for both packages.",malik,3,Done,21600
+Sub-task,102,1,Express server skeleton with core middleware,"helmet, CORS, morgan, cookie-parser, rate limiter, error handler.",mahmod,5,Done,36000
+Sub-task,103,1,MongoDB connection layer with retry and reconnect handling,"Mongoose connection with retry limits and graceful failure exit.",malik,5,Done,32400
+Sub-task,104,1,Tailwind design tokens and base theme configuration,"Color tokens, typography scale, spacing, radii, shadows in tailwind.config.",haya,5,Done,36000
+Story,2,,Database schema and seed data,"All Mongoose models, index strategy, and realistic seed script.",mahmod,,Done,
+Sub-task,201,2,Design Mongoose schemas for all collections,"User, Product, Category, Order, Review, Coupon, Cart, Wishlist, AuditLog, LowStockAlert, ProductEvent.",mahmod,13,Done,108000
+Sub-task,202,2,Seed script with realistic test data,"3 role accounts, 12 products with variants, orders in all statuses, reviews, coupons.",mahmod,5,Done,32400
+Sub-task,203,2,Index strategy including unique compound and TTL indexes,"Unique email, one-active-alert-per-variant, one-review-per-user-product, 180-day TTL on product events.",malik,8,Done,64800
+Story,3,,Authentication and authorization,"JWT auth with refresh rotation, RBAC, and auth UI.",malik,,Done,
+Sub-task,301,3,Register and login endpoints with bcrypt and JWT access tokens,"Zod validation, bcrypt cost 12, 15-minute access tokens.",malik,8,Done,72000
+Sub-task,302,3,Refresh token rotation with httpOnly cookies and reuse detection,"7-day opaque refresh tokens, rotation on use, session revocation on reuse.",malik,13,Done,115200
+Sub-task,303,3,RBAC middleware for customer / inventory_manager / super_admin,"authenticate + authorize middleware applied across route files.",mahmod,5,Done,36000
+Sub-task,304,3,"Login, register, and forgot-password pages with validation","Form validation, error states, redirect-after-login handling.",haya,8,Done,64800
+Sub-task,305,3,Axios instance with silent-refresh interceptor and AuthContext,"Single shared instance, 401 interceptor, silent refresh on mount.",haya,8,Done,72000
+Story,4,,Product catalog,"Product APIs and storefront browsing experience.",haya,,Done,
+Sub-task,401,4,Product listing API with filters sort search and pagination,"Category, price, rating filters; text search; sort options; meta pagination.",mahmod,8,Done,64800
+Sub-task,402,4,Category management endpoints,"Parent/subcategory CRUD with manager authorization.",mahmod,5,Done,32400
+Sub-task,403,4,Product list page with filter sidebar,"Filter UI, sort dropdown, pagination, loading skeletons.",haya,8,Done,72000
+Sub-task,404,4,Product detail page with variants gallery and tabs,"Variant selector, image gallery, specs/description/reviews tabs, add to cart.",haya,13,Done,100800
+Story,5,,Cart and wishlist,"Cart APIs, guest support with merge-on-login, and cart/wishlist pages.",haya,,Done,
+Sub-task,501,5,Cart API with stock validation,"Add/update/remove endpoints validating variant stock levels.",mahmod,8,Done,57600
+Sub-task,502,5,Guest cart and wishlist in localStorage with merge-on-login,"Local persistence for guests, server merge when a session starts.",malik,8,Done,64800
+Sub-task,503,5,Cart and wishlist pages,"Quantity controls, stock warnings, promo coupon field, empty states.",haya,8,Done,64800
+Story,6,,Checkout and payments,"Stripe integration, checkout flow, and order confirmation.",mahmod,,In Progress,
+Sub-task,601,6,Stripe checkout session and webhook handler,"Payment intents, webhook signature verification, stock decrement, purchase events.",mahmod,13,In Progress,43200
+Sub-task,602,6,Checkout page with address selection and mock payment,"Saved address picker, add-address form, sandbox payment step.",haya,8,In Progress,28800
+Sub-task,603,6,Order confirmation flow and email stubs,"Confirmation page, order-confirmation email stub via console mailer.",malik,5,To Do,
+Story,7,,Customer account and orders,"Order history APIs and the account dashboard.",malik,,In Progress,
+Sub-task,701,7,Orders API for history details and status tracking,"Paginated customer order history, order detail with permission checks.",mahmod,8,Done,64800
+Sub-task,702,7,Account dashboard with orders addresses and wishlist tabs,"Tabbed dashboard, address book CRUD, profile details form.",haya,13,In Progress,43200
+Sub-task,703,7,Order detail page with status stepper,"7-state stepper, item list, review entry point for delivered items.",malik,8,To Do,
+Story,8,,Reviews and ratings,"Verified-purchase reviews with denormalized product ratings.",mahmod,,In Progress,
+Sub-task,801,8,Review CRUD with verified-purchase rule and denormalized ratings,"Only delivered purchases can review; ratingAvg/reviewCount recalculated on every change.",mahmod,8,In Progress,28800
+Sub-task,802,8,Review UI on the product page,"Star input, review list, verified badge, edit own review.",haya,5,To Do,
+Sub-task,803,8,Review moderation with soft delete and audit entry,"Staff-only removal, isRemoved flag, audit log write.",malik,5,To Do,
+Story,9,,Admin panel - inventory management,"Role-scoped admin layout and all inventory manager pages.",haya,,In Progress,
+Sub-task,901,9,Admin layout with role-scoped sidebar,"Collapsible sidebar, role filtering, top bar, View Store link.",haya,8,Done,57600
+Sub-task,902,9,Product management CRUD UI,"DataTable listing, create/edit modal with variants, image upload, delete.",haya,13,In Progress,43200
+Sub-task,903,9,Order fulfillment queue with status transitions,"All-orders table, status filter chips, guarded advance/cancel/refund controls.",malik,8,To Do,
+Sub-task,904,9,Coupon management and low stock alert pages,"Coupon list with activate/deactivate, alert list with resolve action.",mahmod,8,To Do,
+Story,10,,Super admin tools,"User management, analytics, and audit log viewer.",malik,,To Do,
+Sub-task,1001,10,User and role management with audited changes,"Paginated user list, role/status changes through audited endpoints.",malik,8,To Do,
+Sub-task,1002,10,Analytics endpoints for revenue top SKUs volume and growth,"Aggregation pipelines over delivered orders and registrations with daily/weekly buckets.",mahmod,13,To Do,
+Sub-task,1003,10,Analytics dashboard with charts,"Stat cards, revenue trend, order volume and customer growth charts, top-SKU table.",haya,8,To Do,
+Sub-task,1004,10,Audit log viewer,"Filterable table of privileged actions with before/after deltas.",malik,5,To Do,
+Story,11,,Automation and background jobs,"Recommendation engine, event tracking, and low-stock automation.",mahmod,,To Do,
+Sub-task,1101,11,Recommendation engine cron with co-occurrence computation,"Daily node-cron job, recency-weighted product pairs, top-10 upserts, cold-start fallback.",malik,13,To Do,
+Sub-task,1102,11,Product event tracking with client-side batching and TTL expiry,"Batched view events from the client, public batch endpoint, 180-day TTL.",malik,5,To Do,
+Sub-task,1103,11,Low-stock trigger and alert email stubs,"Threshold check on stock writes, duplicate-safe alert creation, mailer stub.",mahmod,5,To Do,

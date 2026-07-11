@@ -1,5 +1,7 @@
 import mongoose from 'mongoose';
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/opticart';
+// Falls back to a local instance for development; in production MONGO_URI is
+// supplied via the environment (e.g. the MongoDB Atlas connection string).
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/opticart';
 const RETRY_LIMIT = 5;
 const RETRY_INTERVAL_MS = 5000;
 let connectionAttempts = 0;
