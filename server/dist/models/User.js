@@ -25,8 +25,23 @@ const UserSchema = new Schema({
         required: true,
     },
     refreshTokenHash: { type: String, default: null },
+    // Rotation grace: the previous refresh token stays valid for a short
+    // window so concurrent refreshes (multiple tabs) don't trip reuse detection
+    prevRefreshTokenHash: { type: String, default: null },
+    prevRefreshTokenExpiresAt: { type: Date, default: null },
     addresses: [AddressSchema],
     isActive: { type: Boolean, default: true, required: true },
+    isEmailVerified: { type: Boolean, default: true, required: true },
+    emailVerificationCodeHash: { type: String, default: null },
+    emailVerificationExpiresAt: { type: Date, default: null },
+    passwordResetCodeHash: { type: String, default: null },
+    passwordResetExpiresAt: { type: Date, default: null },
+    authProvider: {
+        type: String,
+        enum: ['local', 'google'],
+        default: 'local',
+        required: true,
+    },
 }, {
     timestamps: true,
     collection: 'users',

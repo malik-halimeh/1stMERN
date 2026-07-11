@@ -6,6 +6,7 @@ import {
   ShoppingBag,
   AlertTriangle,
   FolderTree,
+  PackagePlus,
   Ticket,
   Star,
   Users,
@@ -63,6 +64,12 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Low Stock Alerts',
     href: '/admin/low-stock',
     icon: <AlertTriangle className="h-5 w-5" />,
+    roles: ['inventory_manager', 'super_admin'],
+  },
+  {
+    label: 'Purchases',
+    href: '/admin/purchases',
+    icon: <PackagePlus className="h-5 w-5" />,
     roles: ['inventory_manager', 'super_admin'],
   },
   {

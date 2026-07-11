@@ -131,6 +131,14 @@ const OrderSchema = new Schema({
         type: RefundSchema,
         default: null,
     },
+    feedback: {
+        type: new Schema({
+            rating: { type: Number, required: true, min: 1, max: 5 },
+            text: { type: String, required: true, trim: true, maxlength: 2000 },
+            createdAt: { type: Date, default: Date.now, required: true },
+        }, { _id: false }),
+        default: null,
+    },
     deliveredAt: { type: Date },
     cancelledAt: { type: Date },
 }, {

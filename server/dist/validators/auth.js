@@ -21,6 +21,11 @@ export const ForgotPasswordValidator = z.object({
     email: z.string().trim().email({ message: 'Invalid email address format' }),
 });
 export const ResetPasswordValidator = z.object({
+    email: z.string().trim().email({ message: 'Invalid email address format' }),
+    code: z
+        .string()
+        .trim()
+        .regex(/^\d{6}$/, { message: 'The reset code must be 6 digits' }),
     password: z
         .string()
         .min(8, { message: 'Password must be at least 8 characters long' })

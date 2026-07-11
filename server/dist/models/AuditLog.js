@@ -14,11 +14,14 @@ const AuditLogSchema = new Schema({
         type: String,
         enum: [
             'stock_update',
+            'stock_purchase',
             'order_status_change',
             'refund_decision',
             'role_change',
+            'account_status_change',
             'coupon_cud',
             'review_removal',
+            'user_delete',
         ],
         required: true,
     },
@@ -44,6 +47,12 @@ const AuditLogSchema = new Schema({
 }, {
     collection: 'auditLogs',
 });
+// Query-path indexes: GET /audit-logs filters by actor, action type, and
+// target entity (controllers/auditLog.ts) — without these every filtered
+// page is a collection scan on an ever-growing append-only collection.
+AuditLogSchema.index({ actorId: 1 });
+AuditLogSchema.index({ actionType: 1 });
+AuditLogSchema.index({ targetEntityId: 1 });
 // Append-only rule enforcement: Throw errors on any modification queries
 const blockModification = function (next) {
     next(new Error('Audit logs are append-only. Modifications or deletions are strictly prohibited.'));

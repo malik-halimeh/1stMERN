@@ -4,6 +4,7 @@ import {
   getTopSkus,
   getOrderVolume,
   getCustomerGrowth,
+  getPurchaseSpend,
 } from '../controllers/analytics.js';
 import { authenticate, authorize } from '../middleware/auth.js';
 
@@ -16,5 +17,6 @@ router.get('/revenue', getRevenue);
 router.get('/top-skus', getTopSkus);
 router.get('/order-volume', getOrderVolume);
 router.get('/customer-growth', getCustomerGrowth);
+router.get('/purchase-spend', getPurchaseSpend);
 
 export default router;

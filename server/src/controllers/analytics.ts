@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import Order from '../models/Order.js';
 import User from '../models/User.js';
+import Purchase from '../models/Purchase.js';
 
 const parseWindow = (req: Request) => {
   const days = Math.min(365, Math.max(7, parseInt(req.query.days as string) || 30));
@@ -147,7 +148,48 @@ export const getOrderVolume = async (req: Request, res: Response, next: NextFunc
   }
 };
 
-// 4. GET /api/analytics/customer-growth
+// 4. GET /api/analytics/purchase-spend
+// Stock procurement spend over time (see controllers/purchase.ts)
+export const getPurchaseSpend = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { days, since } = parseWindow(req);
+    const { bucket, _id } = bucketStage(req, days);
+
+    const series = await Purchase.aggregate([
+      { $match: { createdAt: { $gte: since } } },
+      {
+        $group: {
+          _id,
+          spendCents: { $sum: '$totalCostCents' },
+          purchases: { $sum: 1 },
+          units: { $sum: '$quantity' },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        windowDays: days,
+        bucket,
+        totalSpendCents: series.reduce((sum, p) => sum + p.spendCents, 0),
+        totalPurchases: series.reduce((sum, p) => sum + p.purchases, 0),
+        totalUnits: series.reduce((sum, p) => sum + p.units, 0),
+        series: series.map((p) => ({
+          period: p._id,
+          spendCents: p.spendCents,
+          purchases: p.purchases,
+          units: p.units,
+        })),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// 5. GET /api/analytics/customer-growth
 // New customer registrations over time
 export const getCustomerGrowth = async (req: Request, res: Response, next: NextFunction) => {
   try {

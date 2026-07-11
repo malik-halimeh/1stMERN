@@ -2,6 +2,7 @@ import mongoose, { Schema, Document } from 'mongoose';
 
 export type AuditActionType =
   | 'stock_update'
+  | 'stock_purchase'
   | 'order_status_change'
   | 'refund_decision'
   | 'role_change'
@@ -39,6 +40,7 @@ const AuditLogSchema = new Schema<IAuditLog>(
       type: String,
       enum: [
         'stock_update',
+        'stock_purchase',
         'order_status_change',
         'refund_decision',
         'role_change',

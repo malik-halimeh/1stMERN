@@ -15,6 +15,7 @@ import { authenticate, authorize } from '../middleware/auth.js';
 import userRouter from './user.js'
 import analyticsRouter from './analytics.js'
 import notificationRouter from './notification.js'
+import purchaseRouter from './purchase.js'
 
 const router = Router();
 
@@ -67,6 +68,9 @@ router.use('/analytics', analyticsRouter)
 
 // 15. in-app notifications (order status updates, etc.)
 router.use('/notifications', notificationRouter)
+
+// 16. stock purchases (procurement — staff only)
+router.use('/purchases', purchaseRouter)
 
 
 // Protected Stub Route to test access + RBAC (only accessible to Super Admins)

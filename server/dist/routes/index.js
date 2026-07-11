@@ -10,7 +10,12 @@ import lowStockRouter from './lowStock.js';
 import auditLogRouter from './auditLog.js';
 import recommendationRouter from './recommendation.js';
 import orderRouter from './order.js';
+import productEventsRouter from './productEvents.js';
 import { authenticate, authorize } from '../middleware/auth.js';
+import userRouter from './user.js';
+import analyticsRouter from './analytics.js';
+import notificationRouter from './notification.js';
+import purchaseRouter from './purchase.js';
 const router = Router();
 // Base ping route
 router.get('/ping', (req, res) => {
@@ -34,10 +39,20 @@ router.use('/reviews', reviewRouter);
 router.use('/low-stock', lowStockRouter);
 // 9. Audit Logs routes
 router.use('/audit-logs', auditLogRouter);
-// 10. Product Recommendations routes
+// 10. Product Recommendations routes (read from cache — never compute sync)
 router.use('/product-recommendations', recommendationRouter);
 // 11. Orders and stripe transactional routes
 router.use('/orders', orderRouter);
+// 12. Product events (batched analytics writes — public, no auth required)
+router.use('/product-events', productEventsRouter);
+// 13. users
+router.use('/users', userRouter);
+// 14. analytics (super admin)
+router.use('/analytics', analyticsRouter);
+// 15. in-app notifications (order status updates, etc.)
+router.use('/notifications', notificationRouter);
+// 16. stock purchases (procurement — staff only)
+router.use('/purchases', purchaseRouter);
 // Protected Stub Route to test access + RBAC (only accessible to Super Admins)
 router.get('/admin-stub', authenticate, authorize('super_admin'), (req, res) => {
     res.json({

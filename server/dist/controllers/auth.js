@@ -1,9 +1,11 @@
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
+import mongoose from 'mongoose';
 import User from '../models/User.js';
 import { generateAccessToken, generateRefreshToken, hashString } from '../utils/tokens.js';
 import { AppError } from '../utils/errors.js';
-import { RegisterValidator, LoginValidator, ForgotPasswordValidator, } from '../validators/auth.js';
+import { sendVerificationCodeEmail, sendPasswordResetCodeEmail } from '../services/mailer.js';
+import { RegisterValidator, LoginValidator, ForgotPasswordValidator, ResetPasswordValidator, } from '../validators/auth.js';
 // Helper cookie settings matching the security specification
 const getCookieOptions = () => ({
     httpOnly: true,
@@ -11,6 +13,38 @@ const getCookieOptions = () => ({
     sameSite: 'strict',
     maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
 });
+const VERIFICATION_CODE_TTL_MS = 15 * 60 * 1000; // 15 minutes
+// Generate a 6-digit code, store its hash on the user, and email it
+const issueVerificationCode = async (user) => {
+    const code = crypto.randomInt(100000, 1000000).toString();
+    user.emailVerificationCodeHash = hashString(code);
+    user.emailVerificationExpiresAt = new Date(Date.now() + VERIFICATION_CODE_TTL_MS);
+    await user.save();
+    await sendVerificationCodeEmail(user.email, code);
+};
+// Issue session tokens + refresh cookie and send the standard auth payload
+const respondWithSession = async (res, user, statusCode = 200) => {
+    const accessToken = generateAccessToken(user._id.toString(), user.role);
+    const refreshToken = generateRefreshToken();
+    user.refreshTokenHash = hashString(refreshToken);
+    user.prevRefreshTokenHash = null;
+    user.prevRefreshTokenExpiresAt = null;
+    await user.save();
+    res.cookie('refreshToken', `${user._id}:${refreshToken}`, getCookieOptions());
+    res.status(statusCode).json({
+        success: true,
+        data: {
+            accessToken,
+            user: {
+                id: user._id,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+                addresses: user.addresses,
+            },
+        },
+    });
+};
 // 1. POST /api/auth/register
 export const register = async (req, res, next) => {
     try {
@@ -24,42 +58,161 @@ export const register = async (req, res, next) => {
             throw new AppError('AUTH_VALIDATION_FAILED', 'Input validation failed.', 400, details);
         }
         const { name, email, password } = validationResult.data;
-        // Check if email already in use
-        const existingUser = await User.findOne({ email });
-        if (existingUser) {
-            throw new AppError('AUTH_EMAIL_IN_USE', 'This email address is already registered.', 409);
-        }
         // Hash password with bcrypt cost factor 12
         const salt = await bcrypt.genSalt(12);
         const passwordHash = await bcrypt.hash(password, salt);
-        // Create user. Role defaults to 'customer'
+        // Check if email already in use
+        const existingUser = await User.findOne({ email });
+        if (existingUser) {
+            // A previous signup that never verified its email can retry: refresh
+            // the pending account details and send a new code.
+            if (existingUser.isEmailVerified === false) {
+                existingUser.name = name;
+                existingUser.passwordHash = passwordHash;
+                await issueVerificationCode(existingUser);
+                res.status(200).json({
+                    success: true,
+                    data: {
+                        requiresVerification: true,
+                        email: existingUser.email,
+                        message: 'A new verification code has been sent to your email.',
+                    },
+                });
+                return;
+            }
+            throw new AppError('AUTH_EMAIL_IN_USE', 'This email address is already registered.', 409);
+        }
+        // Create user unverified. Role defaults to 'customer'; no session tokens
+        // are issued until the emailed code is confirmed.
         const user = await User.create({
             name,
             email,
             passwordHash,
             role: 'customer',
             isActive: true,
+            isEmailVerified: false,
+            authProvider: 'local',
         });
-        // Issue tokens
-        const accessToken = generateAccessToken(user._id.toString(), user.role);
-        const refreshToken = generateRefreshToken();
-        // Hash and store opaque refresh token in DB
-        user.refreshTokenHash = hashString(refreshToken);
-        await user.save();
-        // Set HTTP-Only refresh cookie (format: userId:opaqueRefreshToken)
-        res.cookie('refreshToken', `${user._id}:${refreshToken}`, getCookieOptions());
+        await issueVerificationCode(user);
         res.status(201).json({
             success: true,
             data: {
-                accessToken,
-                user: {
-                    id: user._id,
-                    name: user.name,
-                    email: user.email,
-                    role: user.role,
-                },
+                requiresVerification: true,
+                email: user.email,
+                message: 'A verification code has been sent to your email.',
             },
         });
+    }
+    catch (error) {
+        next(error);
+    }
+};
+// 1b. POST /api/auth/verify-email — confirm the signup code and open the session
+export const verifyEmail = async (req, res, next) => {
+    try {
+        const { email, code } = req.body;
+        if (!email || typeof email !== 'string' || !code || typeof code !== 'string') {
+            throw new AppError('AUTH_VALIDATION_FAILED', 'Email and verification code are required.', 400);
+        }
+        const user = await User.findOne({ email: email.trim().toLowerCase() });
+        if (!user) {
+            throw new AppError('AUTH_INVALID_CODE', 'Invalid verification code.', 401);
+        }
+        if (user.isEmailVerified !== false) {
+            // Already verified — just tell the client to log in normally
+            throw new AppError('AUTH_ALREADY_VERIFIED', 'This account is already verified. Please sign in.', 409);
+        }
+        if (!user.emailVerificationCodeHash ||
+            !user.emailVerificationExpiresAt ||
+            user.emailVerificationExpiresAt.getTime() < Date.now()) {
+            throw new AppError('AUTH_CODE_EXPIRED', 'The verification code has expired. Please request a new one.', 401);
+        }
+        if (hashString(code.trim()) !== user.emailVerificationCodeHash) {
+            throw new AppError('AUTH_INVALID_CODE', 'Invalid verification code.', 401);
+        }
+        user.isEmailVerified = true;
+        user.emailVerificationCodeHash = null;
+        user.emailVerificationExpiresAt = null;
+        await respondWithSession(res, user, 200);
+    }
+    catch (error) {
+        next(error);
+    }
+};
+// 1c. POST /api/auth/resend-verification — issue a fresh code (no enumeration)
+export const resendVerification = async (req, res, next) => {
+    try {
+        const { email } = req.body;
+        if (!email || typeof email !== 'string') {
+            throw new AppError('AUTH_VALIDATION_FAILED', 'Email is required.', 400);
+        }
+        const user = await User.findOne({ email: email.trim().toLowerCase() });
+        if (user && user.isEmailVerified === false) {
+            await issueVerificationCode(user);
+        }
+        // Same response whether or not the account exists
+        res.status(200).json({
+            success: true,
+            data: { message: 'If a pending account exists for this email, a new code has been sent.' },
+        });
+    }
+    catch (error) {
+        next(error);
+    }
+};
+// 1d. POST /api/auth/google — sign in / sign up with a Google ID token.
+// The Google account's email is verified by Google, so no code flow is needed.
+export const googleAuth = async (req, res, next) => {
+    try {
+        const { credential } = req.body;
+        if (!credential || typeof credential !== 'string') {
+            throw new AppError('AUTH_VALIDATION_FAILED', 'Google credential is required.', 400);
+        }
+        const clientId = process.env.GOOGLE_CLIENT_ID;
+        if (!clientId) {
+            throw new AppError('AUTH_GOOGLE_DISABLED', 'Google sign-in is not configured on this server.', 501);
+        }
+        // Validate the ID token against Google's tokeninfo endpoint
+        const infoRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`);
+        if (!infoRes.ok) {
+            throw new AppError('AUTH_GOOGLE_INVALID', 'Google sign-in token is invalid or expired.', 401);
+        }
+        const info = await infoRes.json();
+        if (info.aud !== clientId) {
+            throw new AppError('AUTH_GOOGLE_INVALID', 'Google token was issued for a different application.', 401);
+        }
+        if (info.email_verified !== 'true' && info.email_verified !== true) {
+            throw new AppError('AUTH_GOOGLE_UNVERIFIED', 'This Google account has no verified email.', 403);
+        }
+        const email = String(info.email).toLowerCase();
+        let user = await User.findOne({ email });
+        if (!user) {
+            // First Google sign-in: provision a customer account with an unusable
+            // random password (they authenticate via Google).
+            const randomPw = crypto.randomBytes(32).toString('hex');
+            const salt = await bcrypt.genSalt(12);
+            user = await User.create({
+                name: info.name || email.split('@')[0],
+                email,
+                passwordHash: await bcrypt.hash(randomPw, salt),
+                role: 'customer',
+                isActive: true,
+                isEmailVerified: true,
+                authProvider: 'google',
+            });
+        }
+        else {
+            if (!user.isActive) {
+                throw new AppError('AUTH_ACCOUNT_DISABLED', 'Your account has been deactivated. Please contact support.', 403);
+            }
+            // Google verified ownership of this email — clear any pending code flow
+            if (user.isEmailVerified === false) {
+                user.isEmailVerified = true;
+                user.emailVerificationCodeHash = null;
+                user.emailVerificationExpiresAt = null;
+            }
+        }
+        await respondWithSession(res, user, 200);
     }
     catch (error) {
         next(error);
@@ -90,31 +243,22 @@ export const login = async (req, res, next) => {
         if (!user.isActive) {
             throw new AppError('AUTH_ACCOUNT_DISABLED', 'Your account has been deactivated. Please contact support.', 403);
         }
-        // Issue new tokens
-        const accessToken = generateAccessToken(user._id.toString(), user.role);
-        const refreshToken = generateRefreshToken();
-        // Hash and save refresh token
-        user.refreshTokenHash = hashString(refreshToken);
-        await user.save();
-        // Set cookie
-        res.cookie('refreshToken', `${user._id}:${refreshToken}`, getCookieOptions());
-        res.status(200).json({
-            success: true,
-            data: {
-                accessToken,
-                user: {
-                    id: user._id,
-                    name: user.name,
-                    email: user.email,
-                    role: user.role,
-                },
-            },
-        });
+        // Unverified signups must confirm their email first — send a fresh code
+        // so the client can jump straight to the verification step.
+        if (user.isEmailVerified === false) {
+            await issueVerificationCode(user);
+            throw new AppError('AUTH_EMAIL_NOT_VERIFIED', 'Please verify your email address. A new verification code has been sent.', 403);
+        }
+        await respondWithSession(res, user, 200);
     }
     catch (error) {
         next(error);
     }
 };
+// Rotation grace window: after a rotation, the replaced refresh token is still
+// accepted (for a new ACCESS token only, no re-rotation) for this long, so
+// near-simultaneous refreshes from multiple tabs don't trip reuse detection.
+const ROTATION_GRACE_MS = 30 * 1000;
 // 3. POST /api/auth/refresh
 export const refresh = async (req, res, next) => {
     try {
@@ -128,31 +272,54 @@ export const refresh = async (req, res, next) => {
         }
         const userId = refreshCookie.substring(0, separatorIndex);
         const tokenPart = refreshCookie.substring(separatorIndex + 1);
+        if (!mongoose.Types.ObjectId.isValid(userId)) {
+            throw new AppError('AUTH_INVALID_REFRESH_TOKEN', 'Session refresh token is malformed.', 401);
+        }
+        const incomingHash = hashString(tokenPart);
+        const newRefreshToken = generateRefreshToken();
+        // Happy path — atomic rotation: the hash match is part of the query, so
+        // of N concurrent refreshes carrying the same token exactly one rotates.
+        const rotated = await User.findOneAndUpdate({ _id: userId, refreshTokenHash: incomingHash }, {
+            refreshTokenHash: hashString(newRefreshToken),
+            prevRefreshTokenHash: incomingHash,
+            prevRefreshTokenExpiresAt: new Date(Date.now() + ROTATION_GRACE_MS),
+        }, { new: true });
+        if (rotated) {
+            res.cookie('refreshToken', `${rotated._id}:${newRefreshToken}`, getCookieOptions());
+            res.status(200).json({
+                success: true,
+                data: {
+                    accessToken: generateAccessToken(rotated._id.toString(), rotated.role),
+                },
+            });
+            return;
+        }
         const user = await User.findById(userId);
         if (!user) {
             throw new AppError('AUTH_USER_NOT_FOUND', 'Associated session user not found.', 401);
         }
-        const incomingHash = hashString(tokenPart);
-        // Compromise detection: check if stored hash matches incoming hash
-        if (user.refreshTokenHash !== incomingHash) {
-            // Stale or duplicate reuse detected. Revoke all refresh access to force full re-login
-            user.refreshTokenHash = null;
-            await user.save();
-            res.clearCookie('refreshToken', getCookieOptions());
-            throw new AppError('AUTH_SESSION_COMPROMISED', 'Session compromised. Token reuse detected. Please log in again.', 403);
+        // Grace path: this token was just rotated away by a concurrent request
+        // (another tab). Issue a fresh access token but do NOT rotate again — the
+        // shared cookie jar already holds the newest refresh token.
+        if (user.prevRefreshTokenHash === incomingHash &&
+            user.prevRefreshTokenExpiresAt &&
+            user.prevRefreshTokenExpiresAt.getTime() > Date.now()) {
+            res.status(200).json({
+                success: true,
+                data: {
+                    accessToken: generateAccessToken(user._id.toString(), user.role),
+                },
+            });
+            return;
         }
-        // Happy Path: Rotate tokens
-        const newAccessToken = generateAccessToken(user._id.toString(), user.role);
-        const newRefreshToken = generateRefreshToken();
-        user.refreshTokenHash = hashString(newRefreshToken);
+        // Stale or duplicate reuse outside the grace window. Revoke all refresh
+        // access to force full re-login
+        user.refreshTokenHash = null;
+        user.prevRefreshTokenHash = null;
+        user.prevRefreshTokenExpiresAt = null;
         await user.save();
-        res.cookie('refreshToken', `${user._id}:${newRefreshToken}`, getCookieOptions());
-        res.status(200).json({
-            success: true,
-            data: {
-                accessToken: newAccessToken,
-            },
-        });
+        res.clearCookie('refreshToken', getCookieOptions());
+        throw new AppError('AUTH_SESSION_COMPROMISED', 'Session compromised. Token reuse detected. Please log in again.', 403);
     }
     catch (error) {
         next(error);
@@ -166,10 +333,14 @@ export const logout = async (req, res, next) => {
             const separatorIndex = refreshCookie.indexOf(':');
             if (separatorIndex !== -1) {
                 const userId = refreshCookie.substring(0, separatorIndex);
-                const user = await User.findById(userId);
+                const user = mongoose.Types.ObjectId.isValid(userId)
+                    ? await User.findById(userId)
+                    : null;
                 if (user) {
                     // Clear DB record hash
                     user.refreshTokenHash = null;
+                    user.prevRefreshTokenHash = null;
+                    user.prevRefreshTokenExpiresAt = null;
                     await user.save();
                 }
             }
@@ -199,33 +370,66 @@ export const forgotPassword = async (req, res, next) => {
             throw new AppError('AUTH_VALIDATION_FAILED', 'Input validation failed.', 400, details);
         }
         const { email } = validationResult.data;
+        // Same-flow as signup: email a 6-digit code (hash stored, 15min TTL).
+        // Secure behavior to prevent email enumeration: identical response
+        // whether or not the account exists.
         const user = await User.findOne({ email });
-        if (!user) {
-            // Secure behavior to prevent email enumeration: return success regardless
-            res.status(200).json({
-                success: true,
-                data: {
-                    message: 'If the email is registered, a password reset link has been logged.',
-                },
-            });
-            return;
+        if (user && user.isActive) {
+            const code = crypto.randomInt(100000, 1000000).toString();
+            user.passwordResetCodeHash = hashString(code);
+            user.passwordResetExpiresAt = new Date(Date.now() + VERIFICATION_CODE_TTL_MS);
+            await user.save();
+            await sendPasswordResetCodeEmail(user.email, code);
         }
-        // Generate short-lived reset token (JWT, 15min TTL)
-        const resetToken = jwt.sign({ userId: user._id.toString(), type: 'reset' }, process.env.JWT_ACCESS_SECRET || 'fallback_access_secret_key_987654', { expiresIn: '15m' });
-        const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
-        const resetLink = `${clientUrl}/reset-password?token=${resetToken}`;
-        // Stub service: Log reset details directly to console as specified
-        console.log('\n================== STUB EMAIL SERVICE ==================');
-        console.log(`To: ${user.email}`);
-        console.log('Subject: OptiCart Password Reset Request');
-        console.log(`Reset Link (Valid for 15 minutes):\n${resetLink}`);
-        console.log('========================================================\n');
         res.status(200).json({
             success: true,
             data: {
-                message: 'If the email is registered, a password reset link has been logged.',
+                message: 'If the email is registered, a password reset code has been sent.',
             },
         });
+    }
+    catch (error) {
+        next(error);
+    }
+};
+// 5b. POST /api/auth/reset-password — confirm the emailed code and set the new password
+export const resetPassword = async (req, res, next) => {
+    try {
+        const validationResult = ResetPasswordValidator.safeParse(req.body);
+        if (!validationResult.success) {
+            const details = validationResult.error.errors.map((e) => ({
+                field: e.path.join('.'),
+                message: e.message,
+            }));
+            throw new AppError('AUTH_VALIDATION_FAILED', 'Input validation failed.', 400, details);
+        }
+        const { email, code, password } = validationResult.data;
+        const user = await User.findOne({ email });
+        if (!user || !user.passwordResetCodeHash) {
+            throw new AppError('AUTH_INVALID_CODE', 'Invalid reset code.', 401);
+        }
+        if (!user.passwordResetExpiresAt || user.passwordResetExpiresAt.getTime() < Date.now()) {
+            throw new AppError('AUTH_CODE_EXPIRED', 'The reset code has expired. Please request a new one.', 401);
+        }
+        if (hashString(code) !== user.passwordResetCodeHash) {
+            throw new AppError('AUTH_INVALID_CODE', 'Invalid reset code.', 401);
+        }
+        if (!user.isActive) {
+            throw new AppError('AUTH_ACCOUNT_DISABLED', 'Your account has been deactivated. Please contact support.', 403);
+        }
+        const salt = await bcrypt.genSalt(12);
+        user.passwordHash = await bcrypt.hash(password, salt);
+        user.passwordResetCodeHash = null;
+        user.passwordResetExpiresAt = null;
+        // Completing the code flow also proves ownership of the email address
+        if (user.isEmailVerified === false) {
+            user.isEmailVerified = true;
+            user.emailVerificationCodeHash = null;
+            user.emailVerificationExpiresAt = null;
+        }
+        // respondWithSession rotates the refresh token, which also revokes any
+        // session an attacker might have had before the password change.
+        await respondWithSession(res, user, 200);
     }
     catch (error) {
         next(error);

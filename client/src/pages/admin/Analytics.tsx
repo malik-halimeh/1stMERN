@@ -30,6 +30,13 @@ interface CustomerGrowthData {
   series: Array<{ period: string; customers: number }>;
 }
 
+interface PurchaseSpendData {
+  totalSpendCents: number;
+  totalPurchases: number;
+  totalUnits: number;
+  series: Array<{ period: string; spendCents: number; purchases: number; units: number }>;
+}
+
 const money = (cents: number) =>
   (cents / 100).toLocaleString(undefined, { style: 'currency', currency: 'USD' });
 
@@ -61,6 +68,7 @@ const AdminAnalytics = () => {
   const [topSkus, setTopSkus] = useState<TopSkusData | null>(null);
   const [orderVolume, setOrderVolume] = useState<OrderVolumeData | null>(null);
   const [customerGrowth, setCustomerGrowth] = useState<CustomerGrowthData | null>(null);
+  const [purchaseSpend, setPurchaseSpend] = useState<PurchaseSpendData | null>(null);
   const [loading, setLoading] = useState(true);
   const [days, setDays] = useState(30);
 
@@ -68,16 +76,18 @@ const AdminAnalytics = () => {
     const load = async () => {
       setLoading(true);
       try {
-        const [rev, skus, vol, growth] = await Promise.all([
+        const [rev, skus, vol, growth, spend] = await Promise.all([
           api.get(`/analytics/revenue?days=${days}`),
           api.get(`/analytics/top-skus?days=${days}&limit=10`),
           api.get(`/analytics/order-volume?days=${days}`),
           api.get(`/analytics/customer-growth?days=${days}`),
+          api.get(`/analytics/purchase-spend?days=${days}`),
         ]);
         setRevenue(rev.data.data);
         setTopSkus(skus.data.data);
         setOrderVolume(vol.data.data);
         setCustomerGrowth(growth.data.data);
+        setPurchaseSpend(spend.data.data);
       } catch (err) {
         console.error('Failed to load analytics:', err);
         addToast('Failed to load analytics.', 'error');
@@ -92,18 +102,19 @@ const AdminAnalytics = () => {
     return (
       <div className="space-y-6">
         <Skeleton className="h-10 w-64" />
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {[...Array(4)].map((_, i) => (
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+          {[...Array(5)].map((_, i) => (
             <Skeleton key={i} className="h-24" />
           ))}
         </div>
+        <Skeleton className="h-72" />
         <Skeleton className="h-72" />
         <Skeleton className="h-72" />
       </div>
     );
   }
 
-  if (!revenue || !orderVolume || !customerGrowth || !topSkus) {
+  if (!revenue || !orderVolume || !customerGrowth || !topSkus || !purchaseSpend) {
     return (
       <EmptyState
         icon={<BarChart3 className="h-12 w-12 text-text-muted" />}
@@ -140,8 +151,8 @@ const AdminAnalytics = () => {
         </div>
       </div>
 
-      {/* 4 stat cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* 5 stat cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <StatTile
           label="Total revenue"
           value={money(revenue.totalRevenueCents)}
@@ -161,6 +172,11 @@ const AdminAnalytics = () => {
           label="Avg order value"
           value={money(revenue.avgOrderValueCents)}
           hint={`${revenue.deliveredOrders} delivered orders`}
+        />
+        <StatTile
+          label="Purchase spend"
+          value={money(purchaseSpend.totalSpendCents)}
+          hint={`${purchaseSpend.totalUnits.toLocaleString()} units bought`}
         />
       </div>
 
@@ -197,6 +213,19 @@ const AdminAnalytics = () => {
             </tbody>
           </table>
         </details>
+      </ChartCard>
+
+      {/* Purchase spend trend (stock bought from suppliers) */}
+      <ChartCard title={`Purchase spend (${purchaseSpend.totalPurchases} purchase${purchaseSpend.totalPurchases === 1 ? '' : 's'})`}>
+        <ColumnChart
+          points={purchaseSpend.series.map((p) => ({
+            label: p.period,
+            value: p.spendCents,
+            tooltip: `${money(p.spendCents)} · ${p.units} unit${p.units === 1 ? '' : 's'} · ${p.period}`,
+          }))}
+          formatTick={compactMoney}
+          heightClass="h-44"
+        />
       </ChartCard>
 
       {/* Order volume + customer growth side by side */}

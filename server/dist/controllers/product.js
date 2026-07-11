@@ -38,8 +38,13 @@ export const getProducts = async (req, res, next) => {
         const page = Math.max(1, parseInt(req.query.page) || 1);
         const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 20));
         const skip = (page - 1) * limit;
-        const { category, minPrice, maxPrice, rating, sort, search } = req.query;
+        const { category, minPrice, maxPrice, rating, sort, search, inStock } = req.query;
         const filter = {};
+        // Storefront passes inStock=1 so sold-out products (every variant at 0)
+        // never show in the shop; the admin catalog omits it and sees everything
+        if (inStock === '1' || inStock === 'true') {
+            filter.variants = { $elemMatch: { stock: { $gt: 0 } } };
+        }
         // Category Filter
         if (category) {
             let catId = null;
@@ -135,7 +140,42 @@ export const getProductBySlug = async (req, res, next) => {
         next(error);
     }
 };
-// 3. POST /api/products - Manager Only (Multipart Cloudinary Upload)
+// 3. GET /api/products/by-ids?ids=id1,id2 — Public batch fetch (used by guest wishlist)
+export const getProductsByIds = async (req, res, next) => {
+    try {
+        const idsParam = req.query.ids;
+        if (!idsParam || !idsParam.trim()) {
+            return res.status(200).json({ success: true, data: [] });
+        }
+        const rawIds = idsParam.split(',').map((s) => s.trim()).filter(Boolean);
+        // Filter to only valid ObjectIds to avoid DB errors
+        const validIds = rawIds.filter((id) => mongoose.Types.ObjectId.isValid(id));
+        if (validIds.length === 0) {
+            return res.status(200).json({ success: true, data: [] });
+        }
+        const products = await Product.find({ _id: { $in: validIds } }).select('name slug brand basePriceCents variants images ratingAvg reviewCount thumbnail isTrending isMostSelling');
+        res.status(200).json({ success: true, data: products });
+    }
+    catch (error) {
+        next(error);
+    }
+};
+// Upload variant image files and attach each to its variant: a variant whose
+// JSON carries `imageSlot: n` receives the n-th `variantImages` file. Variants
+// keeping an existing `image` object simply pass it through untouched.
+const attachVariantImages = async (parsedVariants, variantImageFiles) => {
+    const uploads = [];
+    for (const file of variantImageFiles) {
+        uploads.push(await uploadImageBuffer(file.buffer));
+    }
+    for (const v of parsedVariants) {
+        if (typeof v.imageSlot === 'number' && uploads[v.imageSlot]) {
+            v.image = uploads[v.imageSlot];
+        }
+        delete v.imageSlot;
+    }
+};
+// 4. POST /api/products - Manager Only (Multipart Cloudinary Upload)
 export const createProduct = async (req, res, next) => {
     try {
         // Form data fields might contain stringified JSON arrays
@@ -186,8 +226,9 @@ export const createProduct = async (req, res, next) => {
         else if (meta) {
             parsedMeta = meta;
         }
-        // Process uploaded images via Multer buffer files
-        const imageFiles = req.files;
+        // Process uploaded images via Multer buffer files (fields middleware)
+        const filesMap = req.files;
+        const imageFiles = filesMap?.images;
         const images = [];
         if (imageFiles && imageFiles.length > 0) {
             for (const file of imageFiles) {
@@ -195,6 +236,8 @@ export const createProduct = async (req, res, next) => {
                 images.push(result);
             }
         }
+        // Per-variant photos (optional, matched by imageSlot index)
+        await attachVariantImages(parsedVariants, filesMap?.variantImages || []);
         const basePrice = parseInt(basePriceCents);
         if (isNaN(basePrice) || basePrice < 0) {
             throw new AppError('VALIDATION_FAILED', 'Price must be a non-negative integer.', 422);
@@ -281,6 +324,9 @@ export const updateProduct = async (req, res, next) => {
         let isStockUpdated = false;
         if (variants) {
             const parsedVariants = typeof variants === 'string' ? JSON.parse(variants) : variants;
+            // New variant photos arrive as multipart files alongside the JSON
+            const filesMap = req.files;
+            await attachVariantImages(parsedVariants, filesMap?.variantImages || []);
             product.variants = parsedVariants;
             isStockUpdated = true;
         }

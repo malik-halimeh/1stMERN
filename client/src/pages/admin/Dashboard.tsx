@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../services/api';
 import Skeleton from '../../components/ui/Skeleton';
-import { ShoppingBag, Clock, AlertTriangle, Package, Ticket } from 'lucide-react';
+import { ShoppingBag, Clock, AlertTriangle, Package, PackagePlus, Ticket } from 'lucide-react';
 
 type OrderStatus =
   | 'pending'
@@ -38,6 +38,7 @@ interface Stats {
   activeAlerts: number;
   totalProducts: number;
   activeCoupons: number;
+  monthSpendCents: number;
   recentOrders: RecentOrder[];
 }
 
@@ -49,7 +50,7 @@ const StatTile = ({
   highlight = false,
 }: {
   label: string;
-  value: number;
+  value: number | string;
   icon: React.ReactNode;
   to: string;
   highlight?: boolean;
@@ -62,10 +63,10 @@ const StatTile = ({
       <span className="text-label text-text-secondary">{label}</span>
       <span
         className={`text-[32px] leading-tight font-semibold ${
-          highlight && value > 0 ? 'text-danger' : 'text-text-primary'
+          highlight && typeof value === 'number' && value > 0 ? 'text-danger' : 'text-text-primary'
         }`}
       >
-        {value.toLocaleString()}
+        {typeof value === 'number' ? value.toLocaleString() : value}
       </span>
     </div>
     <span className="p-2 rounded-btn bg-dashboard-section-bg text-text-secondary">{icon}</span>
@@ -78,7 +79,7 @@ const AdminDashboard = () => {
   useEffect(() => {
     const load = async () => {
       try {
-        const [orders, pending, products, lowStock, coupons] = await Promise.all([
+        const [orders, pending, products, lowStock, coupons, purchases] = await Promise.all([
           api.get('/orders?limit=5'),
           api.get('/orders?status=pending&limit=1'),
           api.get('/products?limit=1'),
@@ -86,6 +87,7 @@ const AdminDashboard = () => {
           // the "active" tiles count the whole list, not just the first page
           api.get('/low-stock?limit=100'),
           api.get('/coupons?limit=100'),
+          api.get('/purchases/summary'),
         ]);
         setStats({
           totalOrders: orders.data.meta?.total ?? 0,
@@ -96,6 +98,7 @@ const AdminDashboard = () => {
           ).length,
           activeCoupons: coupons.data.data.filter((c: { isActive: boolean }) => c.isActive)
             .length,
+          monthSpendCents: purchases.data.data?.monthSpendCents ?? 0,
           recentOrders: orders.data.data,
         });
       } catch (err) {
@@ -106,6 +109,7 @@ const AdminDashboard = () => {
           totalProducts: 0,
           activeAlerts: 0,
           activeCoupons: 0,
+          monthSpendCents: 0,
           recentOrders: [],
         });
       }
@@ -123,15 +127,15 @@ const AdminDashboard = () => {
       </div>
 
       {!stats ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          {[...Array(5)].map((_, i) => (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+          {[...Array(6)].map((_, i) => (
             <Skeleton key={i} className="h-24" />
           ))}
         </div>
       ) : (
         <>
           {/* KPI row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
             <StatTile
               label="Total orders"
               value={stats.totalOrders}
@@ -163,6 +167,15 @@ const AdminDashboard = () => {
               value={stats.activeCoupons}
               icon={<Ticket className="h-5 w-5" />}
               to="/admin/coupons"
+            />
+            <StatTile
+              label="Purchase spend (month)"
+              value={`$${(stats.monthSpendCents / 100).toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}`}
+              icon={<PackagePlus className="h-5 w-5" />}
+              to="/admin/purchases"
             />
           </div>
 

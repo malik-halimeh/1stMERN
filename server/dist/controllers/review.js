@@ -5,6 +5,7 @@ import Product from '../models/Product.js';
 import AuditLog from '../models/AuditLog.js';
 import User from '../models/User.js';
 import { AppError } from '../utils/errors.js';
+import { escapeRegex } from '../utils/escapeRegex.js';
 // Helper to recalculate ratings/reviews count under transaction session
 const recalculateProductRatings = async (productId, session) => {
     // Get all active reviews that are not deleted/removed
@@ -67,7 +68,11 @@ export const createReview = async (req, res, next) => {
         if (!req.user) {
             throw new AppError('AUTH_UNAUTHORIZED', 'Session is not authenticated.', 401);
         }
-        const { productId, rating, text, images } = req.body;
+        // NOTE: review photos are deliberately NOT accepted from the request body.
+        // There is no upload pipeline for reviews (unlike products' Multer→
+        // Cloudinary flow), so accepting raw client-supplied URLs would let anyone
+        // store arbitrary external links that get rendered to other shoppers.
+        const { productId, rating, text } = req.body;
         const numRating = parseInt(rating);
         if (!productId || isNaN(numRating) || !text) {
             throw new AppError('VALIDATION_FAILED', 'Product ID, valid numeric rating (1-5), and review text are required.', 422);
@@ -108,7 +113,7 @@ export const createReview = async (req, res, next) => {
                     orderId: deliveredOrder._id,
                     rating: numRating,
                     text,
-                    images: images || [],
+                    images: [],
                     isFlagged: false,
                     isRemoved: false,
                     createdAt: new Date(),
@@ -121,7 +126,7 @@ export const createReview = async (req, res, next) => {
         catch (txErr) {
             await session.abortTransaction();
             // Standalone MongoDB server compatibility fallback:
-            if (txErr.message.includes('transaction') || txErr.codeName === 'CommandNotSupportedOnReplicaSetMemberWithoutReplication') {
+            if (/transaction/i.test(txErr.message) || txErr.codeName === 'CommandNotSupportedOnReplicaSetMemberWithoutReplication') {
                 console.warn('Transactions are disabled by DB host. Executing queries sequentially...');
                 // Retry standard sequential execution
                 review = await Review.create({
@@ -130,7 +135,7 @@ export const createReview = async (req, res, next) => {
                     orderId: deliveredOrder._id,
                     rating: numRating,
                     text,
-                    images: images || [],
+                    images: [],
                     isFlagged: false,
                     isRemoved: false,
                     createdAt: new Date(),
@@ -161,7 +166,8 @@ export const updateReview = async (req, res, next) => {
             throw new AppError('AUTH_UNAUTHORIZED', 'Session is not authenticated.', 401);
         }
         const { id } = req.params;
-        const { rating, text, images } = req.body;
+        // images deliberately not accepted — see createReview note
+        const { rating, text } = req.body;
         if (!mongoose.Types.ObjectId.isValid(id)) {
             throw new AppError('VALIDATION_FAILED', 'Invalid review ID format.', 422);
         }
@@ -188,8 +194,6 @@ export const updateReview = async (req, res, next) => {
         }
         if (text)
             review.text = text;
-        if (images)
-            review.images = images;
         review.editedAt = new Date();
         try {
             session.startTransaction();
@@ -199,7 +203,7 @@ export const updateReview = async (req, res, next) => {
         }
         catch (txErr) {
             await session.abortTransaction();
-            if (txErr.message.includes('transaction') || txErr.codeName === 'CommandNotSupportedOnReplicaSetMemberWithoutReplication') {
+            if (/transaction/i.test(txErr.message) || txErr.codeName === 'CommandNotSupportedOnReplicaSetMemberWithoutReplication') {
                 console.warn('Transactions disabled. Executing standard queries...');
                 await review.save();
                 await recalculateProductRatings(review.productId);
@@ -247,7 +251,7 @@ export const deleteReview = async (req, res, next) => {
         }
         catch (txErr) {
             await session.abortTransaction();
-            if (txErr.message.includes('transaction') || txErr.codeName === 'CommandNotSupportedOnReplicaSetMemberWithoutReplication') {
+            if (/transaction/i.test(txErr.message) || txErr.codeName === 'CommandNotSupportedOnReplicaSetMemberWithoutReplication') {
                 console.warn('Transactions disabled. Running sequential soft deletes...');
                 await review.save();
                 await recalculateProductRatings(review.productId);
@@ -281,5 +285,39 @@ export const deleteReview = async (req, res, next) => {
     }
     finally {
         session.endSession();
+    }
+};
+// GET /api/reviews - Full review list for staff moderation (paginated)
+export const getAllReviews = async (req, res, next) => {
+    try {
+        const page = Math.max(1, parseInt(req.query.page) || 1);
+        const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 50));
+        const skip = (page - 1) * limit;
+        const filter = { isRemoved: false };
+        // Search review text (partial, case-insensitive)
+        const q = req.query.q;
+        if (q?.trim()) {
+            filter.text = { $regex: escapeRegex(q), $options: 'i' };
+        }
+        const total = await Review.countDocuments(filter);
+        const reviews = await Review.find(filter)
+            .populate('productId', 'name slug')
+            .populate('userId', 'name email')
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(limit);
+        res.status(200).json({
+            success: true,
+            data: reviews,
+            meta: {
+                total,
+                page,
+                limit,
+                pages: Math.ceil(total / limit) || 1,
+            },
+        });
+    }
+    catch (error) {
+        next(error);
     }
 };

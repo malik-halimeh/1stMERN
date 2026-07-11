@@ -22,6 +22,7 @@ import Users from './pages/admin/users.js';
 import AdminOrders from './pages/admin/Orders.js';
 import AdminProducts from './pages/admin/Products.js';
 import AdminLowStock from './pages/admin/LowStock.js';
+import AdminPurchases from './pages/admin/Purchases.js';
 import AdminCoupons from './pages/admin/Coupons.js';
 import AdminReviews from './pages/admin/Reviews.js';
 import AdminAuditLogs from './pages/admin/AuditLogs.js';
@@ -202,6 +203,14 @@ const AppRoutes: React.FC = () => {
           element={
             <AdminContentRoute>
               <AdminLowStock />
+            </AdminContentRoute>
+          }
+        />
+        <Route
+          path="/admin/purchases"
+          element={
+            <AdminContentRoute>
+              <AdminPurchases />
             </AdminContentRoute>
           }
         />
