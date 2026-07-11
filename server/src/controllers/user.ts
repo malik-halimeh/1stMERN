@@ -1,8 +1,9 @@
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import mongoose from 'mongoose';
 import User, { IUser } from '../models/User.js';
 import AuditLog from '../models/AuditLog.js';
+import { AppError } from '../utils/errors.js';
 import { escapeRegex } from '../utils/escapeRegex.js';
 import {
     CreateUserValidator,
@@ -13,6 +14,10 @@ import {
 
 const SAFE_FIELDS =
     '-passwordHash -refreshTokenHash -prevRefreshTokenHash -prevRefreshTokenExpiresAt';
+
+// All handlers route failures through next(err) → the global errorHandler,
+// like every other controller. Never respond with the raw error object:
+// driver/Mongoose errors can leak query internals to the client.
 
 const writeUserAudit = async (
     req: Request,
@@ -40,7 +45,7 @@ const writeUserAudit = async (
  * GET /api/users
  * Get all users
  */
-export const getUsers = async (req: Request, res: Response): Promise<void> => {
+export const getUsers = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
         const page = Math.max(1, parseInt(req.query.page as string) || 1);
         const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 20));
@@ -73,11 +78,7 @@ export const getUsers = async (req: Request, res: Response): Promise<void> => {
             },
         });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch users.',
-            error,
-        });
+        next(error);
     }
 };
 
@@ -85,21 +86,15 @@ export const getUsers = async (req: Request, res: Response): Promise<void> => {
  * GET /api/users/:id
  * Get a single user
  */
-export const getUserById = async (
-    req: Request,
-    res: Response
-): Promise<void> => {
+export const getUserById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-        const user = await User.findById(req.params.id).select(
-            '-passwordHash -refreshTokenHash -prevRefreshTokenHash -prevRefreshTokenExpiresAt'
-        );
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            throw new AppError('VALIDATION_FAILED', 'Invalid user ID format.', 422);
+        }
 
+        const user = await User.findById(req.params.id).select(SAFE_FIELDS);
         if (!user) {
-            res.status(404).json({
-                success: false,
-                message: 'User not found.',
-            });
-            return;
+            throw new AppError('USER_NOT_FOUND', 'User not found.', 404);
         }
 
         res.status(200).json({
@@ -107,11 +102,7 @@ export const getUserById = async (
             data: user,
         });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch user.',
-            error,
-        });
+        next(error);
     }
 };
 
@@ -119,35 +110,22 @@ export const getUserById = async (
  * POST /api/users
  * Create a new user
  */
-export const createUser = async (
-    req: Request,
-    res: Response
-): Promise<void> => {
+export const createUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
         const validationResult = CreateUserValidator.safeParse(req.body);
         if (!validationResult.success) {
-            res.status(400).json({
-                success: false,
-                message: 'Input validation failed.',
-                details: validationResult.error.errors.map((e) => ({
-                    field: e.path.join('.'),
-                    message: e.message,
-                })),
-            });
-            return;
+            const details = validationResult.error.errors.map((e) => ({
+                field: e.path.join('.'),
+                message: e.message,
+            }));
+            throw new AppError('VALIDATION_FAILED', 'Input validation failed.', 400, details);
         }
 
-        const { name, email, password, role, addresses, isActive } =
-            validationResult.data;
+        const { name, email, password, role, addresses, isActive } = validationResult.data;
 
         const existingUser = await User.findOne({ email });
-
         if (existingUser) {
-            res.status(409).json({
-                success: false,
-                message: 'Email already exists.',
-            });
-            return;
+            throw new AppError('USER_EMAIL_IN_USE', 'Email already exists.', 409);
         }
 
         // Hash password with bcrypt cost factor 12 (same as register)
@@ -175,11 +153,7 @@ export const createUser = async (
             data: userResponse,
         });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Failed to create user.',
-            error,
-        });
+        next(error);
     }
 };
 
@@ -187,22 +161,19 @@ export const createUser = async (
  * PUT /api/users/:id
  * Update a user
  */
-export const updateUser = async (
-    req: Request,
-    res: Response
-): Promise<void> => {
+export const updateUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            throw new AppError('VALIDATION_FAILED', 'Invalid user ID format.', 422);
+        }
+
         const validationResult = UpdateUserValidator.safeParse(req.body);
         if (!validationResult.success) {
-            res.status(400).json({
-                success: false,
-                message: 'Input validation failed.',
-                details: validationResult.error.errors.map((e) => ({
-                    field: e.path.join('.'),
-                    message: e.message,
-                })),
-            });
-            return;
+            const details = validationResult.error.errors.map((e) => ({
+                field: e.path.join('.'),
+                message: e.message,
+            }));
+            throw new AppError('VALIDATION_FAILED', 'Input validation failed.', 400, details);
         }
 
         const { password, ...fields } = validationResult.data;
@@ -213,21 +184,13 @@ export const updateUser = async (
             update.passwordHash = await bcrypt.hash(password, salt);
         }
 
-        const user = await User.findByIdAndUpdate(
-            req.params.id,
-            update,
-            {
-                new: true,
-                runValidators: true,
-            }
-        ).select('-passwordHash -refreshTokenHash -prevRefreshTokenHash -prevRefreshTokenExpiresAt');
+        const user = await User.findByIdAndUpdate(req.params.id, update, {
+            new: true,
+            runValidators: true,
+        }).select(SAFE_FIELDS);
 
         if (!user) {
-            res.status(404).json({
-                success: false,
-                message: 'User not found.',
-            });
-            return;
+            throw new AppError('USER_NOT_FOUND', 'User not found.', 404);
         }
 
         res.status(200).json({
@@ -236,11 +199,7 @@ export const updateUser = async (
             data: user,
         });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Failed to update user.',
-            error,
-        });
+        next(error);
     }
 };
 
@@ -248,27 +207,19 @@ export const updateUser = async (
  * DELETE /api/users/:id
  * Delete a user
  */
-export const deleteUser = async (
-    req: Request,
-    res: Response
-): Promise<void> => {
+export const deleteUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            throw new AppError('VALIDATION_FAILED', 'Invalid user ID format.', 422);
+        }
+
         if (req.user?.userId === req.params.id) {
-            res.status(409).json({
-                success: false,
-                message: 'You cannot delete your own account.',
-            });
-            return;
+            throw new AppError('USER_SELF_DELETE', 'You cannot delete your own account.', 409);
         }
 
         const user = await User.findByIdAndDelete(req.params.id);
-
         if (!user) {
-            res.status(404).json({
-                success: false,
-                message: 'User not found.',
-            });
-            return;
+            throw new AppError('USER_NOT_FOUND', 'User not found.', 404);
         }
 
         await writeUserAudit(
@@ -284,40 +235,32 @@ export const deleteUser = async (
             message: 'User deleted successfully.',
         });
     } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Failed to delete user.',
-            error,
-        });
+        next(error);
     }
 };
+
 /**
  * PATCH /api/users/:id/role
  * Change a user's role (audited)
  */
-export const updateUserRole = async (req: Request, res: Response): Promise<void> => {
+export const updateUserRole = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
         const validationResult = UpdateUserRoleValidator.safeParse(req.body);
         if (!validationResult.success) {
-            res.status(400).json({
-                success: false,
-                message: 'Role must be one of: customer, inventory_manager, super_admin.',
-            });
-            return;
+            throw new AppError(
+                'VALIDATION_FAILED',
+                'Role must be one of: customer, inventory_manager, super_admin.',
+                400
+            );
         }
 
         if (req.user?.userId === req.params.id) {
-            res.status(409).json({
-                success: false,
-                message: 'You cannot change your own role.',
-            });
-            return;
+            throw new AppError('USER_SELF_ROLE_CHANGE', 'You cannot change your own role.', 409);
         }
 
         const user = await User.findById(req.params.id).select(SAFE_FIELDS);
         if (!user) {
-            res.status(404).json({ success: false, message: 'User not found.' });
-            return;
+            throw new AppError('USER_NOT_FOUND', 'User not found.', 404);
         }
 
         const prevRole = user.role;
@@ -343,7 +286,7 @@ export const updateUserRole = async (req: Request, res: Response): Promise<void>
             data: user,
         });
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Failed to update role.', error });
+        next(error);
     }
 };
 
@@ -351,29 +294,20 @@ export const updateUserRole = async (req: Request, res: Response): Promise<void>
  * PATCH /api/users/:id/status
  * Activate or deactivate an account (audited)
  */
-export const updateUserStatus = async (req: Request, res: Response): Promise<void> => {
+export const updateUserStatus = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
         const validationResult = UpdateUserStatusValidator.safeParse(req.body);
         if (!validationResult.success) {
-            res.status(400).json({
-                success: false,
-                message: 'isActive must be a boolean.',
-            });
-            return;
+            throw new AppError('VALIDATION_FAILED', 'isActive must be a boolean.', 400);
         }
 
         if (req.user?.userId === req.params.id) {
-            res.status(409).json({
-                success: false,
-                message: 'You cannot deactivate your own account.',
-            });
-            return;
+            throw new AppError('USER_SELF_DEACTIVATE', 'You cannot deactivate your own account.', 409);
         }
 
         const user = await User.findById(req.params.id).select(SAFE_FIELDS);
         if (!user) {
-            res.status(404).json({ success: false, message: 'User not found.' });
-            return;
+            throw new AppError('USER_NOT_FOUND', 'User not found.', 404);
         }
 
         const prevStatus = user.isActive;
@@ -399,6 +333,6 @@ export const updateUserStatus = async (req: Request, res: Response): Promise<voi
             data: user,
         });
     } catch (error) {
-        res.status(500).json({ success: false, message: 'Failed to update status.', error });
+        next(error);
     }
 };

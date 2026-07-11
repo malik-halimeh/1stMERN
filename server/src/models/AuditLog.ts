@@ -74,6 +74,13 @@ const AuditLogSchema = new Schema<IAuditLog>(
   }
 );
 
+// Query-path indexes: GET /audit-logs filters by actor, action type, and
+// target entity (controllers/auditLog.ts) — without these every filtered
+// page is a collection scan on an ever-growing append-only collection.
+AuditLogSchema.index({ actorId: 1 });
+AuditLogSchema.index({ actionType: 1 });
+AuditLogSchema.index({ targetEntityId: 1 });
+
 // Append-only rule enforcement: Throw errors on any modification queries
 const blockModification = function (this: any, next: (err?: Error) => void) {
   next(new Error('Audit logs are append-only. Modifications or deletions are strictly prohibited.'));

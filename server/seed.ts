@@ -38,10 +38,13 @@ import AuditLog from './src/models/AuditLog.js';
 
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/opticart';
 
-// ─── Placeholder image helper ─────────────────────────────────────────────────
-const img = (name: string) => ({
-  url: `https://placehold.co/800x600/1a1a2e/ffffff?text=${encodeURIComponent(name)}`,
-  publicId: `opticart_seed_${name.toLowerCase().replace(/\s+/g, '_')}`,
+// ─── Product photo helper ─────────────────────────────────────────────────────
+// Real appliance photos served from the Unsplash CDN (each URL HEAD-verified
+// 200 at seed-authoring time). w=800 + fit=crop keeps card aspect ratios
+// consistent with the storefront's object-cover rendering.
+const photo = (id: string, tag: string) => ({
+  url: `https://images.unsplash.com/photo-${id}?auto=format&fit=crop&w=800&q=80`,
+  publicId: `unsplash_${tag}`,
 });
 
 // ─── Main seed function ───────────────────────────────────────────────────────
@@ -138,7 +141,7 @@ const seed = async () => {
       isTrending: true,
       isMostSelling: false,
       searchKeywords: ['refrigerator', 'frost-free', 'double door'],
-      images: [img('FrostFree 500L'), img('FrostFree 500L Side')],
+      images: [photo('1571175443880-49e1d25b2bc5', 'frostfree_500l'), photo('1721613877687-c9099b698faa', 'frostfree_500l_side')],
       variants: [
         { sku: 'OCFF-500-SS', color: 'Stainless Steel', stock: 25, priceDeltaCents: 0, costPriceCents: 75000, lowStockThreshold: 5 },
         { sku: 'OCFF-500-BL', color: 'Matte Black', stock: 12, priceDeltaCents: 2000, costPriceCents: 77000, lowStockThreshold: 5 },
@@ -154,7 +157,7 @@ const seed = async () => {
       isTrending: false,
       isMostSelling: true,
       searchKeywords: ['mini fridge', 'compact', 'single door'],
-      images: [img('Compact 200L')],
+      images: [photo('1536353284924-9220c464e262', 'compact_200l'), photo('1606859191214-25806e8e2423', 'compact_200l_side')],
       variants: [
         { sku: 'OCCP-200-WH', color: 'White', stock: 40, priceDeltaCents: 0, costPriceCents: 26000, lowStockThreshold: 8 },
         { sku: 'OCCP-200-SV', color: 'Silver', stock: 18, priceDeltaCents: 1500, costPriceCents: 27500, lowStockThreshold: 8 },
@@ -171,7 +174,7 @@ const seed = async () => {
       isTrending: true,
       isMostSelling: false,
       searchKeywords: ['french door', 'luxury fridge', 'bottom freezer'],
-      images: [img('French Door 650L')],
+      images: [photo('1722859178634-ccc8ea5680d2', 'french_door_650l'), photo('1710947949965-8150d227d337', 'french_door_650l_side')],
       variants: [
         { sku: 'OCFD-650-SS', color: 'Stainless Steel', stock: 8, priceDeltaCents: 0, costPriceCents: 130000, lowStockThreshold: 3 },
         { sku: 'OCFD-650-BK', color: 'Piano Black', stock: 4, priceDeltaCents: 5000, costPriceCents: 135000, lowStockThreshold: 3 },
@@ -187,7 +190,7 @@ const seed = async () => {
       isTrending: false,
       isMostSelling: true,
       searchKeywords: ['side by side', 'ice maker', 'water dispenser'],
-      images: [img('Side-by-Side 580L')],
+      images: [photo('1630459065645-549fe5a56db4', 'side_by_side_580l'), photo('1643494847705-74808059bf07', 'side_by_side_580l_side')],
       variants: [
         { sku: 'OCSBS-580-SS', color: 'Stainless Steel', stock: 15, priceDeltaCents: 0, costPriceCents: 105000, lowStockThreshold: 4 },
       ],
@@ -202,7 +205,7 @@ const seed = async () => {
       isTrending: false,
       isMostSelling: false,
       searchKeywords: ['quiet', 'noise free', 'two door fridge'],
-      images: [img('QuietZone 320L')],
+      images: [photo('1721563927724-74b1a0ddef33', 'quietzone_320l'), photo('1484154218962-a197022b5858', 'quietzone_320l_side')],
       variants: [
         { sku: 'OCQZ-320-WH', color: 'White', stock: 20, priceDeltaCents: 0, costPriceCents: 52000, lowStockThreshold: 5 },
         { sku: 'OCQZ-320-SV', color: 'Silver', stock: 11, priceDeltaCents: 1000, costPriceCents: 53000, lowStockThreshold: 5 },
@@ -218,7 +221,7 @@ const seed = async () => {
       isTrending: true,
       isMostSelling: false,
       searchKeywords: ['wine cooler', 'beverage fridge', 'dual zone'],
-      images: [img('Wine Cellar 120')],
+      images: [photo('1728177196098-ef48bfb63832', 'wine_cellar_120'), photo('1620431858899-f5ac9f3f6f36', 'wine_cellar_120_side')],
       variants: [
         { sku: 'OCWC-120-BK', color: 'Black', stock: 6, priceDeltaCents: 0, costPriceCents: 90000, lowStockThreshold: 2 },
       ],
@@ -234,7 +237,7 @@ const seed = async () => {
       isTrending: true,
       isMostSelling: true,
       searchKeywords: ['convection oven', 'built-in oven', 'self-clean'],
-      images: [img('ConvecPro Oven')],
+      images: [photo('1596552183299-000ef779e88d', 'convecpro_oven'), photo('1623114112815-74a4b9fe505d', 'convecpro_oven_side')],
       variants: [
         { sku: 'OCCP-60-SS', color: 'Stainless Steel', stock: 22, priceDeltaCents: 0, costPriceCents: 58000, lowStockThreshold: 5 },
         { sku: 'OCCP-60-BK', color: 'Matte Black', stock: 10, priceDeltaCents: 2000, costPriceCents: 60000, lowStockThreshold: 5 },
@@ -250,7 +253,7 @@ const seed = async () => {
       isTrending: false,
       isMostSelling: true,
       searchKeywords: ['induction', 'cooktop', '4 zone', 'boost'],
-      images: [img('InductaFlame Cooktop')],
+      images: [photo('1600512592336-7e1452b9743c', 'inductaflame_cooktop'), photo('1622413472825-0857e054ea39', 'inductaflame_cooktop_side')],
       variants: [
         { sku: 'OCIF-4Z-BK', color: 'Black', stock: 30, priceDeltaCents: 0, costPriceCents: 40000, lowStockThreshold: 6 },
       ],
@@ -265,7 +268,7 @@ const seed = async () => {
       isTrending: false,
       isMostSelling: false,
       searchKeywords: ['microwave', 'combination', 'grill', 'convection'],
-      images: [img('MicroWave Pro 32L')],
+      images: [photo('1574269909862-7e1d70bb8078', 'microwave_pro_32l'), photo('1585659722983-3a675dabf23d', 'microwave_pro_32l_side')],
       variants: [
         { sku: 'OCMW-32-SS', color: 'Stainless Steel', stock: 35, priceDeltaCents: 0, costPriceCents: 20000, lowStockThreshold: 8 },
         { sku: 'OCMW-32-WH', color: 'White', stock: 28, priceDeltaCents: -500, costPriceCents: 19500, lowStockThreshold: 8 },
@@ -281,7 +284,7 @@ const seed = async () => {
       isTrending: false,
       isMostSelling: false,
       searchKeywords: ['air fryer', 'healthy cooking', 'digital'],
-      images: [img('AirFryer Max 8L')],
+      images: [photo('1695089028114-ce28248f0ab9', 'airfryer_max_8l'), photo('1621955293419-2655068eee84', 'airfryer_max_8l_side')],
       variants: [
         { sku: 'OCAF-8L-BK', color: 'Black', stock: 3, priceDeltaCents: 0, costPriceCents: 14000, lowStockThreshold: 5 }, // LOW STOCK seed
         { sku: 'OCAF-8L-WH', color: 'White', stock: 20, priceDeltaCents: 0, costPriceCents: 14000, lowStockThreshold: 5 },
@@ -297,7 +300,7 @@ const seed = async () => {
       isTrending: false,
       isMostSelling: false,
       searchKeywords: ['steam oven', 'combi', 'sous-vide'],
-      images: [img('SteamBake 45cm')],
+      images: [photo('1628797292362-1f382b2f4b5d', 'steambake_45cm'), photo('1599083549933-838ea352c1cc', 'steambake_45cm_side')],
       variants: [
         { sku: 'OCSB-45-SS', color: 'Stainless Steel', stock: 7, priceDeltaCents: 0, costPriceCents: 90000, lowStockThreshold: 3 },
       ],
@@ -312,7 +315,7 @@ const seed = async () => {
       isTrending: false,
       isMostSelling: false,
       searchKeywords: ['dishwasher', 'slim', 'energy efficient'],
-      images: [img('Dishwasher SlimLine')],
+      images: [photo('1581622558663-b2e33377dfb2', 'dishwasher_slimline'), photo('1620568400263-6f1cf95b9e30', 'dishwasher_slimline_side')],
       variants: [
         { sku: 'OCDW-45-WH', color: 'White', stock: 14, priceDeltaCents: 0, costPriceCents: 35000, lowStockThreshold: 5 },
         { sku: 'OCDW-45-SS', color: 'Stainless Steel', stock: 9, priceDeltaCents: 3000, costPriceCents: 37000, lowStockThreshold: 5 },

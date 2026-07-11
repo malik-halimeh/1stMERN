@@ -87,8 +87,8 @@ To use real Stripe test mode:
 
 ### Frontend (`client/`)
 - **React** + TypeScript + Vite
-- **React Router v6** (client-side navigation)
-- **Context API** (AuthContext, CartContext, ToastContext)
+- **React Router v7** (client-side navigation)
+- **Context API** (AuthContext, ShopContext, ToastContext)
 - **Guest support**: localStorage cart + wishlist with merge-on-login
 
 ---
@@ -124,14 +124,16 @@ Recommendations are **never** computed synchronously on page load — only the c
 
 ---
 
-## ✉️ Email Notifications (Stub)
+## ✉️ Email Notifications
 
-Emails log to the server console (no SMTP configured). Three triggers:
-- **Order confirmation** — fires when Stripe webhook confirms payment
-- **Order status change** — fires on shipped/delivered/cancelled/refunded transitions
-- **Low-stock alert** — fires when a variant's stock drops at or below its threshold (one email per unique active alert)
+Real emails are sent when SMTP credentials exist in `server/.env` (`GMAIL_USER` + `GMAIL_APP_PASSWORD`, or generic `SMTP_*` variables). Without credentials every message logs to the server console instead. Triggers:
+- **Signup verification code** — 6-digit code, required before the first login
+- **Password reset code** — 6-digit code for the forgot-password flow
+- **Order confirmation** — fires when the Stripe webhook confirms payment
+- **Order status change** — fires on confirmed/shipped/delivered/cancelled/refunded transitions (includes the staff-entered reason for cancellations and refunds)
+- **Low-stock alert** — sent to all active inventory managers when a variant's stock drops to its threshold (one email per unique active alert)
 
-To wire a real provider, replace the `console.log` stubs in `server/src/services/mailer.ts`.
+Transport selection lives in `server/src/services/mailer.ts`.
 
 ---
 
@@ -142,11 +144,15 @@ Copy `server/.env.example` to `server/.env`:
 ```env
 PORT=5000
 MONGO_URI=mongodb://localhost:27017/opticart
-JWT_SECRET=...
-JWT_ACCESS_SECRET=...
-JWT_REFRESH_SECRET=...
+JWT_ACCESS_SECRET=<long random string — REQUIRED in production>
 CLIENT_URL=http://localhost:5173
-STRIPE_SECRET_KEY=sk_test_mock_key
-CLOUDINARY_URL=cloudinary://mock
+STRIPE_SECRET_KEY=sk_test_mock_key      # real key enables live Stripe test mode
+STRIPE_WEBHOOK_SECRET=                  # whsec_... — required with a real Stripe key
+CLOUDINARY_URL=cloudinary://mock        # real URL enables uploads
+GOOGLE_CLIENT_ID=                       # enables Google sign-in
+GMAIL_USER=                             # + GMAIL_APP_PASSWORD enables real emails
+GMAIL_APP_PASSWORD=
 NODE_ENV=development
 ```
+
+Notes: only `JWT_ACCESS_SECRET` is read for token signing (the refresh token is an opaque random string, not a JWT). In production the server **refuses to start** without `JWT_ACCESS_SECRET`.

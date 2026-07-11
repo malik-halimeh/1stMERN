@@ -1,7 +1,33 @@
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 
-const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || 'fallback_access_secret_key_987654';
+// The secret is resolved LAZILY (first token operation), not at module load:
+// ESM imports are hoisted above dotenv.config() in server.ts, so reading
+// process.env here at import time would always miss the .env value and
+// silently sign every token with a fallback. Same pattern as services/mailer.
+let cachedAccessSecret: string | null = null;
+
+const getAccessSecret = (): string => {
+  if (cachedAccessSecret) return cachedAccessSecret;
+
+  const secret = process.env.JWT_ACCESS_SECRET;
+  if (secret && secret.trim()) {
+    cachedAccessSecret = secret;
+    return cachedAccessSecret;
+  }
+
+  // No secret configured: refuse to run in production — a public fallback
+  // string would let anyone forge admin tokens against the deployment.
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'JWT_ACCESS_SECRET is not set. Refusing to sign tokens with an insecure fallback in production.'
+    );
+  }
+
+  console.warn('[tokens] JWT_ACCESS_SECRET not set — using an insecure DEVELOPMENT-ONLY fallback.');
+  cachedAccessSecret = 'dev_only_insecure_access_secret_987654';
+  return cachedAccessSecret;
+};
 
 export interface IAccessTokenPayload {
   userId: string;
@@ -11,12 +37,12 @@ export interface IAccessTokenPayload {
 // 1. Generate Access Token (JWT, 15min TTL)
 export const generateAccessToken = (userId: string, role: string): string => {
   const payload: IAccessTokenPayload = { userId, role };
-  return jwt.sign(payload, JWT_ACCESS_SECRET, { expiresIn: '15m' });
+  return jwt.sign(payload, getAccessSecret(), { expiresIn: '15m' });
 };
 
 // 2. Verify Access Token
 export const verifyAccessToken = (token: string): IAccessTokenPayload => {
-  return jwt.verify(token, JWT_ACCESS_SECRET) as IAccessTokenPayload;
+  return jwt.verify(token, getAccessSecret()) as IAccessTokenPayload;
 };
 
 // 3. Generate Opaque Refresh Token (opaque random string)

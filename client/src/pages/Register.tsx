@@ -124,7 +124,8 @@ const Register: React.FC = () => {
       await mergeGuestData(addToast);
       await refreshShopData();
       addToast('Email verified — welcome to OptiCart!', 'success');
-      navigate('/account');
+      // Customers land on the storefront, ready to shop
+      navigate('/', { replace: true });
     } catch (error: any) {
       const errMsg = error.response?.data?.error?.message || 'Verification failed. Please check the code.';
       addToast(errMsg, 'error');
@@ -158,7 +159,8 @@ const Register: React.FC = () => {
       await mergeGuestData(addToast);
       await refreshShopData();
       addToast('Signed in with Google — welcome to OptiCart!', 'success');
-      navigate('/account');
+      // Customers land on the storefront, ready to shop
+      navigate('/', { replace: true });
     } catch (error: any) {
       const errMsg = error.response?.data?.error?.message || 'Google sign-in failed.';
       addToast(errMsg, 'error');

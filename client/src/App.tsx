@@ -1,9 +1,6 @@
 import React, { useEffect } from 'react';
 import { Navigate, BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 
-// Layouts
-import AdminLayout from './components/layout/AdminLayout.js';
-
 // Auth
 import { useAuth } from './context/AuthContext.js';
 
@@ -30,6 +27,7 @@ import AdminReviews from './pages/admin/Reviews.js';
 import AdminAuditLogs from './pages/admin/AuditLogs.js';
 import AdminDashboard from './pages/admin/Dashboard.js';
 import AdminAnalytics from './pages/admin/Analytics.js';
+import AdminProfile from './pages/admin/Profile.js';
 import Categories from './pages/Inventory/Categories.js';
 import { AdminPanel } from './pages/admin/AdminPanel.js';
 
@@ -69,30 +67,9 @@ const ProtectedRoute: React.FC<{
 
 // --------------------------------------------------------------------------
 // Admin page components
-// Each admin path renders its own AdminPage so the sidebar highlights
-// correctly and navigating between /admin/* paths re-renders the content
-// without a full browser reload.
+// Each admin path gets its own route so the sidebar highlights correctly and
+// navigating between /admin/* paths re-renders without a full browser reload.
 // --------------------------------------------------------------------------
-
-/** Reads the current pathname and passes it as activePath to AdminLayout */
-const AdminPage: React.FC<{ title: string; description?: string }> = ({ title, description }) => {
-  const { pathname } = useLocation();
-  return (
-    <AdminLayout activePath={pathname}>
-      <div className="flex flex-col gap-4">
-        <h1 className="text-h1 font-bold text-primary-dark">{title}</h1>
-        {description && <p className="text-text-secondary">{description}</p>}
-      </div>
-    </AdminLayout>
-  );
-};
-
-/** Wraps an AdminPage in the role-guard so each route stays DRY */
-const AdminRoute: React.FC<{ title: string; description?: string }> = (props) => (
-  <ProtectedRoute requiredRoles={['inventory_manager', 'super_admin']}>
-    <AdminPage {...props} />
-  </ProtectedRoute>
-);
 
 /** Role-guarded admin layout wrapper for pages with real content */
 const AdminContentRoute: React.FC<{
@@ -281,10 +258,9 @@ const AppRoutes: React.FC = () => {
         <Route
           path="/admin/profile"
           element={
-            <AdminRoute
-              title="Profile Settings"
-              description="Update your admin account details."
-            />
+            <AdminContentRoute>
+              <AdminProfile />
+            </AdminContentRoute>
           }
         />
 

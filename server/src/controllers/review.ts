@@ -82,7 +82,11 @@ export const createReview = async (req: Request, res: Response, next: NextFuncti
       throw new AppError('AUTH_UNAUTHORIZED', 'Session is not authenticated.', 401);
     }
 
-    const { productId, rating, text, images } = req.body;
+    // NOTE: review photos are deliberately NOT accepted from the request body.
+    // There is no upload pipeline for reviews (unlike products' Multer→
+    // Cloudinary flow), so accepting raw client-supplied URLs would let anyone
+    // store arbitrary external links that get rendered to other shoppers.
+    const { productId, rating, text } = req.body;
     const numRating = parseInt(rating);
 
     if (!productId || isNaN(numRating) || !text) {
@@ -138,7 +142,7 @@ export const createReview = async (req: Request, res: Response, next: NextFuncti
             orderId: deliveredOrder._id,
             rating: numRating,
             text,
-            images: images || [],
+            images: [],
             isFlagged: false,
             isRemoved: false,
             createdAt: new Date(),
@@ -163,7 +167,7 @@ export const createReview = async (req: Request, res: Response, next: NextFuncti
           orderId: deliveredOrder._id,
           rating: numRating,
           text,
-          images: images || [],
+          images: [],
           isFlagged: false,
           isRemoved: false,
           createdAt: new Date(),
@@ -194,7 +198,8 @@ export const updateReview = async (req: Request, res: Response, next: NextFuncti
     }
 
     const { id } = req.params;
-    const { rating, text, images } = req.body;
+    // images deliberately not accepted — see createReview note
+    const { rating, text } = req.body;
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       throw new AppError('VALIDATION_FAILED', 'Invalid review ID format.', 422);
@@ -226,7 +231,6 @@ export const updateReview = async (req: Request, res: Response, next: NextFuncti
     }
 
     if (text) review.text = text;
-    if (images) review.images = images;
     review.editedAt = new Date();
 
     try {

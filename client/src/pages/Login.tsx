@@ -20,9 +20,14 @@ const Login: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Find previous redirect path or default to '/account'
+  // Where to land after sign-in: honor a legitimate ?redirect= target (e.g.
+  // /checkout sent the user here), but never bounce back into an auth page —
+  // otherwise the user appears "stuck" on the sign-in screen. Customers
+  // default to the storefront home.
   const searchParams = new URLSearchParams(location.search);
-  const from = searchParams.get('redirect') || '/account';
+  const rawRedirect = searchParams.get('redirect') || '';
+  const from =
+    rawRedirect && !/^\/(login|register|forgot-password)/.test(rawRedirect) ? rawRedirect : '/';
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();

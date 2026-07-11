@@ -43,10 +43,13 @@ export const couponApplyRateLimiter = rateLimit({
 });
 
 
-// General API Limiter: 100 requests per 15 minutes per IP
+// General API Limiter: 1000 requests per 15 minutes per IP — generous enough
+// that normal browsing (and a whole classroom behind one NAT) never trips it,
+// while still stopping runaway scripts. Auth endpoints have their own strict
+// limiter above; this is only the outer safety net.
 export const apiRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10000,
+  max: 1000,
   standardHeaders: true,
   legacyHeaders: false,
   handler: (req, res, next) => {

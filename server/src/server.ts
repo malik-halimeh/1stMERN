@@ -27,6 +27,10 @@ app.use(
     credentials: true,
   })
 );
+// Stripe webhook needs the RAW request body: signature verification hashes
+// the exact bytes Stripe sent, so this route is mounted with express.raw
+// BEFORE express.json consumes the stream. Every other route stays JSON.
+app.use('/api/orders/webhook', express.raw({ type: 'application/json' }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());

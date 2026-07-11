@@ -205,28 +205,37 @@ export const createCheckoutSession = async (req: Request, res: Response, next: N
 };
 
 // 2. POST /api/orders/webhook - Stripe Webhook payment receiver
+// The route is mounted with express.raw (see server.ts), so req.body is the
+// raw Buffer — required because constructEvent verifies a signature over the
+// exact bytes Stripe sent, which a parsed-then-restringified body can't match.
 export const stripeWebhook = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const isMock = !process.env.STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY === 'sk_test_mock_key';
-    
+    const rawBody: Buffer | unknown = req.body;
+    const parseRawJson = () => {
+      if (Buffer.isBuffer(rawBody)) return JSON.parse(rawBody.toString('utf8'));
+      return rawBody; // already-parsed body (e.g. direct controller invocation in tests)
+    };
+
     let event: any;
-    
-    if (isMock) {
-      event = req.body;
-    } else {
+
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    if (!isMock && webhookSecret) {
+      // Real Stripe mode with a configured secret: FAIL CLOSED. An unsigned or
+      // tampered payload must never be able to mark an order as paid.
       const sig = req.headers['stripe-signature'];
-      const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-      
-      if (webhookSecret && sig) {
-        try {
-          event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
-        } catch (err: any) {
-          console.warn('Webhook signature check failed. Falling back to body parsing for local/mock tools.');
-          event = req.body;
-        }
-      } else {
-        event = req.body;
+      if (!sig || !Buffer.isBuffer(rawBody)) {
+        throw new AppError('WEBHOOK_SIGNATURE_MISSING', 'Stripe signature header is required.', 400);
       }
+      try {
+        event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
+      } catch (err: any) {
+        throw new AppError('WEBHOOK_SIGNATURE_INVALID', 'Stripe webhook signature verification failed.', 400);
+      }
+    } else {
+      // Mock/dev mode (no real key or no webhook secret yet): the client's
+      // MockPaymentForm posts the event itself, so parse the JSON body as-is.
+      event = parseRawJson();
     }
 
     // Handle payment_intent.succeeded
@@ -242,15 +251,39 @@ export const stripeWebhook = async (req: Request, res: Response, next: NextFunct
       if (order && order.paymentStatus === 'pending') {
         order.paymentStatus = 'succeeded';
 
-        // Decrement variants stock and check low-stock triggers
+        // Decrement variants stock and check low-stock triggers.
+        // Atomic conditional $inc: the stock >= quantity guard is part of the
+        // query, so two near-simultaneous payments for the last units can't
+        // both decrement past zero (the old read-modify-save pattern could).
         for (const item of order.items) {
-          const product = await Product.findById(item.productId);
+          const decremented = await Product.findOneAndUpdate(
+            {
+              _id: item.productId,
+              variants: { $elemMatch: { sku: item.variantSku, stock: { $gte: item.quantity } } },
+            },
+            { $inc: { 'variants.$.stock': -item.quantity } },
+            { new: true }
+          );
+
+          let product = decremented;
+          if (!product) {
+            // Lost the race (or stock drifted): clamp the variant to 0 and log
+            // the oversell so staff can resolve it during confirmation.
+            product = await Product.findOneAndUpdate(
+              { _id: item.productId, 'variants.sku': item.variantSku },
+              { $set: { 'variants.$.stock': 0 } },
+              { new: true }
+            );
+            if (product) {
+              console.warn(
+                `⚠ Oversell detected on ${item.variantSku} (order ${order.orderNumber}): paid quantity ${item.quantity} exceeded remaining stock. Variant clamped to 0.`
+              );
+            }
+          }
+
           if (product) {
             const variant = product.variants.find((v) => v.sku === item.variantSku);
             if (variant) {
-              variant.stock = Math.max(0, variant.stock - item.quantity);
-              await product.save();
-
               // Trigger low stock warning alert
               await checkAndTriggerLowStock(
                 product._id as mongoose.Types.ObjectId,
@@ -525,6 +558,41 @@ export const updateOrderStatus = async (req: Request, res: Response, next: NextF
     }
 
     const prevStatus = order.status;
+
+    // Refunds actually move money: issue the Stripe refund BEFORE persisting
+    // the status, so a failed refund never leaves an order marked "refunded"
+    // while the customer was never repaid. Mock mode records a mock refund id.
+    if (status === 'refunded') {
+      const isMock =
+        !process.env.STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY === 'sk_test_mock_key';
+      let stripeRefundId: string;
+
+      if (!isMock && order.paymentIntentId && order.paymentStatus === 'succeeded') {
+        try {
+          const stripeRefund = await stripe.refunds.create({
+            payment_intent: order.paymentIntentId,
+          });
+          stripeRefundId = stripeRefund.id;
+        } catch (refundErr: any) {
+          throw new AppError(
+            'REFUND_FAILED',
+            `Stripe refund failed: ${refundErr.message}. The order status was NOT changed.`,
+            502
+          );
+        }
+      } else {
+        stripeRefundId = `mock_re_${Math.random().toString(36).substr(2, 9)}`;
+      }
+
+      order.refund = {
+        status: 'approved',
+        reason,
+        approvedBy: new mongoose.Types.ObjectId(req.user.userId),
+        approvedAt: new Date(),
+        stripeRefundId,
+      };
+    }
+
     order.status = status as any;
 
     // Timestamp terminal transitions
@@ -555,6 +623,34 @@ export const updateOrderStatus = async (req: Request, res: Response, next: NextF
       });
     } catch (auditErr: any) {
       console.error('Failed to write audit log for order status change:', auditErr.message);
+    }
+
+    // Refunds additionally get their own dedicated audit entry carrying the
+    // money-movement details (who approved, why, Stripe refund id)
+    if (status === 'refunded' && order.refund) {
+      try {
+        const AuditLog = (await import('../models/AuditLog.js')).default;
+        const actor = await User.findById(req.user.userId);
+        await AuditLog.create({
+          actorId: new mongoose.Types.ObjectId(req.user.userId),
+          actorName: actor?.name || 'Inventory Manager',
+          actionType: 'refund_decision',
+          targetEntityType: 'Order',
+          targetEntityId: order._id,
+          changeDelta: {
+            before: { refund: null },
+            after: {
+              refund: {
+                status: order.refund.status,
+                reason: order.refund.reason,
+                stripeRefundId: order.refund.stripeRefundId,
+              },
+            },
+          },
+        });
+      } catch (auditErr: any) {
+        console.error('Failed to write refund_decision audit log:', auditErr.message);
+      }
     }
 
     // In-app notification for the order owner (bell in the storefront header)

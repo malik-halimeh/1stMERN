@@ -99,7 +99,8 @@ const ForgotPassword: React.FC = () => {
       await mergeGuestData(addToast);
       await refreshShopData();
       addToast('Password updated — welcome back!', 'success');
-      navigate('/account');
+      // Customers land on the storefront, ready to shop
+      navigate('/', { replace: true });
     } catch (error: any) {
       const errMsg = error.response?.data?.error?.message || 'Reset failed. Please check the code.';
       addToast(errMsg, 'error');

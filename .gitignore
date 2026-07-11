@@ -2,7 +2,9 @@ node_modules/
 dist/
 .env
 .env.*
+!.env.example
 *.log
 .DS_Store
-OptiCart_Database_Structure_v4_full.md
-OptiCart_Database_Structure.md
+project-structure.txt
+client/project-structure.txt
+presentation/
