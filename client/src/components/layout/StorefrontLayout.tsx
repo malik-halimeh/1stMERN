@@ -1,6 +1,54 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { User, Heart, ShoppingBag, X, Menu, ChevronDown, ChevronRight, LogOut, LayoutDashboard } from 'lucide-react';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import {
+  User,
+  Heart,
+  ShoppingBag,
+  X,
+  Menu,
+  ChevronDown,
+  ChevronRight,
+  LogOut,
+  LayoutDashboard,
+  Search,
+  MapPin,
+  Phone,
+  Mail,
+} from 'lucide-react';
+
+// Brand glyphs — newer lucide-react versions no longer ship social brand icons
+const brandIcon = (path: string) => (
+  <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4" aria-hidden="true">
+    <path d={path} />
+  </svg>
+);
+
+const SOCIAL_LINKS = [
+  {
+    label: 'Facebook',
+    icon: brandIcon(
+      'M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z'
+    ),
+  },
+  {
+    label: 'Instagram',
+    icon: brandIcon(
+      'M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0 5.838a6 6 0 100 12 6 6 0 000-12zm0 9.9a3.9 3.9 0 110-7.8 3.9 3.9 0 010 7.8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z'
+    ),
+  },
+  {
+    label: 'X (Twitter)',
+    icon: brandIcon(
+      'M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z'
+    ),
+  },
+  {
+    label: 'YouTube',
+    icon: brandIcon(
+      'M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z'
+    ),
+  },
+];
 import Breadcrumb from '../ui/Breadcrumb.js';
 import type { BreadcrumbItem } from '../ui/Breadcrumb.js';
 import NotificationBell from '../ui/NotificationBell.js';
@@ -100,6 +148,52 @@ const StorefrontLayout: React.FC<StorefrontLayoutProps> = ({ children, breadcrum
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [expandedMobileCategory, setExpandedMobileCategory] = useState<string | null>(null);
 
+  // Header search — lives in the sticky header so it stays put while the page
+  // scrolls. Submitting routes to the shop page, which reads ?search= itself.
+  const [searchParams] = useSearchParams();
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Keep the box in sync when the URL's search param changes (e.g. back button)
+  useEffect(() => {
+    setSearchQuery(searchParams.get('search') || '');
+  }, [searchParams]);
+
+  const submitSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    const q = searchQuery.trim();
+    navigate(q ? `/products?search=${encodeURIComponent(q)}` : '/products');
+  };
+
+  const searchBox = (
+    <form onSubmit={submitSearch} className="relative w-full" role="search">
+      <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-text-muted pointer-events-none" />
+      <input
+        type="search"
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        placeholder="Search appliances…"
+        aria-label="Search products"
+        className="w-full rounded-full border border-text-disabled bg-dashboard-section-bg/60 pl-10 pr-20 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent focus:bg-surface transition-colors [&::-webkit-search-cancel-button]:hidden"
+      />
+      {searchQuery && (
+        <button
+          type="button"
+          onClick={() => setSearchQuery('')}
+          className="absolute right-14 top-1/2 -translate-y-1/2 p-1 text-text-muted hover:text-text-primary rounded-full"
+          aria-label="Clear search"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      )}
+      <button
+        type="submit"
+        className="absolute right-1 top-1/2 -translate-y-1/2 px-3.5 py-1.5 rounded-full bg-primary text-white text-xs font-semibold hover:bg-primary-dark transition-colors"
+      >
+        Search
+      </button>
+    </form>
+  );
+
   return (
     <div className="min-h-screen flex flex-col bg-background text-text-primary font-sans">
       {/* 1. Announcement Bar */}
@@ -115,14 +209,16 @@ const StorefrontLayout: React.FC<StorefrontLayoutProps> = ({ children, breadcrum
         </div>
       )}
 
-      {/* 2. Sticky Header — single slim row: logo, category nav, actions */}
+      {/* 2. Sticky Header — row 1: logo, search, actions; row 2: category nav.
+          The whole block is sticky, so the search bar stays in place on scroll. */}
       <header className="sticky top-0 z-40 bg-surface border-b border-dashboard-section-bg shadow-level1">
         <div className="max-w-7xl mx-auto px-4 py-2.5 flex items-center gap-3 sm:gap-6">
           {/* Logo & Mobile Menu Toggle */}
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 sm:gap-4 flex-shrink-0">
             <button
               onClick={() => setIsMobileMenuOpen(true)}
               className="lg:hidden p-1 text-text-secondary hover:bg-dashboard-section-bg rounded-btn"
+              aria-label="Open menu"
             >
               <Menu className="h-6 w-6" />
             </button>
@@ -131,72 +227,8 @@ const StorefrontLayout: React.FC<StorefrontLayoutProps> = ({ children, breadcrum
             </Link>
           </div>
 
-          {/* Category Nav (desktop) — real categories, compact hover dropdowns */}
-          <nav className="hidden lg:flex items-center gap-1 flex-grow select-none">
-            <Link
-              to="/products"
-              className="px-3 py-2 rounded-btn text-sm font-semibold text-text-secondary hover:text-primary hover:bg-dashboard-section-bg transition-colors"
-            >
-              All Products
-            </Link>
-
-            {categories.map((cat) => {
-              const isOpen = activeCategory === cat._id;
-              const hasSubs = (cat.subcategories?.length ?? 0) > 0;
-              return (
-                /* py-3/-my-3 bridges the hover gap between button and panel;
-                   handleMenuLeave adds a 180 ms close delay on top */
-                <div
-                  key={cat._id}
-                  className="relative py-3 -my-3"
-                  onMouseEnter={() => hasSubs && handleMenuEnter(cat._id)}
-                  onMouseLeave={handleMenuLeave}
-                >
-                  <button
-                    onClick={() => goToCategory(cat.slug)}
-                    className={`flex items-center gap-1 px-3 py-2 rounded-btn text-sm font-semibold transition-colors ${
-                      isOpen
-                        ? 'text-primary bg-primary/5'
-                        : 'text-text-secondary hover:text-primary hover:bg-dashboard-section-bg'
-                    }`}
-                    aria-haspopup={hasSubs}
-                    aria-expanded={isOpen}
-                  >
-                    <span>{cat.name}</span>
-                    {hasSubs && (
-                      <ChevronDown
-                        className={`h-3.5 w-3.5 transition-transform duration-200 ${
-                          isOpen ? 'rotate-180' : ''
-                        }`}
-                      />
-                    )}
-                  </button>
-
-                  {isOpen && hasSubs && (
-                    <div className="absolute left-0 top-full w-60 bg-surface border border-dashboard-section-bg rounded-dropdown shadow-level3 py-2 z-50 animate-scale-in">
-                      <button
-                        onClick={() => goToCategory(cat.slug)}
-                        className="w-full text-left px-4 py-2 text-sm font-bold text-primary hover:bg-dashboard-section-bg transition-colors"
-                      >
-                        All {cat.name}
-                      </button>
-                      <div className="my-1 border-t border-dashboard-section-bg" />
-                      {cat.subcategories!.map((sub) => (
-                        <button
-                          key={sub._id}
-                          onClick={() => goToCategory(sub.slug)}
-                          className="w-full text-left px-4 py-2 text-sm text-text-secondary hover:bg-dashboard-section-bg hover:text-primary transition-colors flex items-center justify-between group/item"
-                        >
-                          <span>{sub.name}</span>
-                          <ChevronRight className="h-3.5 w-3.5 text-text-muted opacity-0 group-hover/item:opacity-100 transition-opacity" />
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </nav>
+          {/* Search — centered, always visible on ≥md screens */}
+          <div className="hidden md:block flex-grow max-w-xl mx-auto">{searchBox}</div>
 
           {/* Action Icons */}
           <div className="flex items-center gap-2 lg:gap-3 select-none ml-auto">
@@ -300,6 +332,78 @@ const StorefrontLayout: React.FC<StorefrontLayoutProps> = ({ children, breadcrum
           </div>
 
         </div>
+
+        {/* Mobile search — its own row inside the sticky header */}
+        <div className="md:hidden px-4 pb-2.5">{searchBox}</div>
+
+        {/* Category Nav (desktop) — second header row, real categories with hover dropdowns */}
+        <nav className="hidden lg:block border-t border-dashboard-section-bg/70 select-none">
+          <div className="max-w-7xl mx-auto px-4 flex items-center gap-1">
+            <Link
+              to="/products"
+              className="px-3 py-2 text-sm font-semibold text-text-secondary hover:text-primary transition-colors border-b-2 border-transparent hover:border-primary"
+            >
+              All Products
+            </Link>
+
+            {categories.map((cat) => {
+              const isOpen = activeCategory === cat._id;
+              const hasSubs = (cat.subcategories?.length ?? 0) > 0;
+              return (
+                /* handleMenuLeave adds a 180 ms close delay so the pointer can
+                   travel from trigger to panel without collapsing it */
+                <div
+                  key={cat._id}
+                  className="relative"
+                  onMouseEnter={() => hasSubs && handleMenuEnter(cat._id)}
+                  onMouseLeave={handleMenuLeave}
+                >
+                  <button
+                    onClick={() => goToCategory(cat.slug)}
+                    className={`flex items-center gap-1 px-3 py-2 text-sm font-semibold transition-colors border-b-2 ${
+                      isOpen
+                        ? 'text-primary border-primary'
+                        : 'text-text-secondary border-transparent hover:text-primary hover:border-primary'
+                    }`}
+                    aria-haspopup={hasSubs}
+                    aria-expanded={isOpen}
+                  >
+                    <span>{cat.name}</span>
+                    {hasSubs && (
+                      <ChevronDown
+                        className={`h-3.5 w-3.5 transition-transform duration-200 ${
+                          isOpen ? 'rotate-180' : ''
+                        }`}
+                      />
+                    )}
+                  </button>
+
+                  {isOpen && hasSubs && (
+                    <div className="absolute left-0 top-full w-60 bg-surface border border-dashboard-section-bg rounded-dropdown shadow-level3 py-2 z-50 animate-scale-in">
+                      <button
+                        onClick={() => goToCategory(cat.slug)}
+                        className="w-full text-left px-4 py-2 text-sm font-bold text-primary hover:bg-dashboard-section-bg transition-colors"
+                      >
+                        All {cat.name}
+                      </button>
+                      <div className="my-1 border-t border-dashboard-section-bg" />
+                      {cat.subcategories!.map((sub) => (
+                        <button
+                          key={sub._id}
+                          onClick={() => goToCategory(sub.slug)}
+                          className="w-full text-left px-4 py-2 text-sm text-text-secondary hover:bg-dashboard-section-bg hover:text-primary transition-colors flex items-center justify-between group/item"
+                        >
+                          <span>{sub.name}</span>
+                          <ChevronRight className="h-3.5 w-3.5 text-text-muted opacity-0 group-hover/item:opacity-100 transition-opacity" />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </nav>
       </header>
 
       {/* 3. Mobile Slide-out Menu */}
@@ -440,44 +544,110 @@ const StorefrontLayout: React.FC<StorefrontLayoutProps> = ({ children, breadcrum
       </main>
 
       {/* 6. Footer */}
-      <footer className="bg-primary-dark text-white border-t border-text-secondary/20 font-sans mt-auto select-none">
-        <div className="max-w-7xl mx-auto px-4 py-10 sm:py-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-          <div>
-            <h3 className="text-h3 font-bold text-white mb-4">OptiCart</h3>
-            <p className="text-caption text-text-muted max-w-xs leading-relaxed">
-              Premium grade appliances engineered for modern families. Reliable products, secure payments, and expert installation.
+      <footer className="bg-text-primary text-white font-sans mt-auto select-none">
+        <div className="max-w-7xl mx-auto px-4 py-12 grid grid-cols-2 lg:grid-cols-4 gap-x-8 gap-y-10">
+          {/* Brand + socials */}
+          <div className="col-span-2 lg:col-span-1">
+            <Link to="/" className="text-h2 font-bold tracking-tight text-white inline-flex items-center gap-1">
+              Opti<span className="text-primary">Cart</span>
+            </Link>
+            <p className="mt-3 text-sm text-white/60 max-w-xs leading-relaxed">
+              Premium grade appliances engineered for modern families. Reliable products, secure
+              payments, and expert installation.
             </p>
+            <div className="mt-5 flex items-center gap-2">
+              {SOCIAL_LINKS.map((s) => (
+                <a
+                  key={s.label}
+                  href="#"
+                  aria-label={s.label}
+                  className="p-2.5 rounded-full bg-white/5 text-white/60 hover:bg-primary hover:text-white transition-colors"
+                >
+                  {s.icon}
+                </a>
+              ))}
+            </div>
           </div>
+
+          {/* Shop — live categories, same links as the header nav */}
           <div>
-            <h4 className="text-secondary font-semibold text-white mb-4">Categories</h4>
-            <ul className="flex flex-col gap-2 text-caption text-text-muted">
-              <li><Link to="/products?category=major-appliances" className="hover:text-white transition-colors">Major Appliances</Link></li>
-              <li><Link to="/products?category=small-appliances" className="hover:text-white transition-colors">Small Appliances</Link></li>
-              <li><Link to="/products" className="hover:text-white transition-colors">Special Offers</Link></li>
-              <li><Link to="/products?sort=newest" className="hover:text-white transition-colors">New Releases</Link></li>
+            <h4 className="text-sm font-semibold uppercase tracking-wider text-white/90 mb-4">Shop</h4>
+            <ul className="flex flex-col gap-2.5 text-sm text-white/60">
+              <li>
+                <Link to="/products" className="hover:text-primary transition-colors">All Products</Link>
+              </li>
+              {categories.slice(0, 4).map((cat) => (
+                <li key={cat._id}>
+                  <Link
+                    to={`/products?category=${encodeURIComponent(cat.slug)}`}
+                    className="hover:text-primary transition-colors"
+                  >
+                    {cat.name}
+                  </Link>
+                </li>
+              ))}
+              <li>
+                <Link to="/products?sort=newest" className="hover:text-primary transition-colors">New Releases</Link>
+              </li>
             </ul>
           </div>
+
+          {/* Customer care */}
           <div>
-            <h4 className="text-secondary font-semibold text-white mb-4">Customer Care</h4>
-            <ul className="flex flex-col gap-2 text-caption text-text-muted">
-              <li><Link to="/" className="hover:text-white transition-colors">Help Center</Link></li>
-              <li><Link to="/" className="hover:text-white transition-colors">Shipping &amp; Delivery</Link></li>
-              <li><Link to="/" className="hover:text-white transition-colors">Returns &amp; Refunds</Link></li>
-              <li><Link to="/" className="hover:text-white transition-colors">Warranty Policies</Link></li>
+            <h4 className="text-sm font-semibold uppercase tracking-wider text-white/90 mb-4">Customer Care</h4>
+            <ul className="flex flex-col gap-2.5 text-sm text-white/60">
+              <li><Link to="/account" className="hover:text-primary transition-colors">My Account</Link></li>
+              <li><Link to="/wishlist" className="hover:text-primary transition-colors">Wishlist</Link></li>
+              <li><Link to="/cart" className="hover:text-primary transition-colors">Cart</Link></li>
+              <li><Link to="/" className="hover:text-primary transition-colors">Shipping &amp; Delivery</Link></li>
+              <li><Link to="/" className="hover:text-primary transition-colors">Returns &amp; Refunds</Link></li>
+              <li><Link to="/" className="hover:text-primary transition-colors">Warranty Policies</Link></li>
             </ul>
           </div>
-          <div>
-            <h4 className="text-secondary font-semibold text-white mb-4">Corporate</h4>
-            <ul className="flex flex-col gap-2 text-caption text-text-muted">
-              <li><Link to="/" className="hover:text-white transition-colors">About Us</Link></li>
-              <li><Link to="/" className="hover:text-white transition-colors">Careers</Link></li>
-              <li><Link to="/" className="hover:text-white transition-colors">Privacy Policy</Link></li>
-              <li><Link to="/" className="hover:text-white transition-colors">Terms of Service</Link></li>
+
+          {/* Contact */}
+          <div className="col-span-2 lg:col-span-1">
+            <h4 className="text-sm font-semibold uppercase tracking-wider text-white/90 mb-4">Contact Us</h4>
+            <ul className="flex flex-col gap-3 text-sm text-white/60">
+              <li className="flex items-start gap-3">
+                <MapPin className="h-4 w-4 mt-0.5 text-primary flex-shrink-0" />
+                <span>123 Appliance Avenue, Suite 500<br />Springfield, ST 12345</span>
+              </li>
+              <li className="flex items-center gap-3">
+                <Phone className="h-4 w-4 text-primary flex-shrink-0" />
+                <a href="tel:+18005550123" className="hover:text-primary transition-colors">+1 (800) 555-0123</a>
+              </li>
+              <li className="flex items-center gap-3">
+                <Mail className="h-4 w-4 text-primary flex-shrink-0" />
+                <a href="mailto:support@opticart.dev" className="hover:text-primary transition-colors">support@opticart.dev</a>
+              </li>
             </ul>
+            <p className="mt-4 text-caption text-white/40">Support hours: Mon–Sat, 9:00–18:00</p>
           </div>
         </div>
-        <div className="border-t border-text-secondary/10 py-6 text-center text-caption text-text-muted">
-          © {new Date().getFullYear()} OptiCart Appliances Inc. All rights reserved. University Graded Project.
+
+        {/* Bottom bar */}
+        <div className="border-t border-white/10">
+          <div className="max-w-7xl mx-auto px-4 py-5 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <p className="text-caption text-white/50 text-center sm:text-left">
+              © {new Date().getFullYear()} OptiCart Appliances Inc. All rights reserved.
+            </p>
+            <div className="flex items-center gap-4 text-caption text-white/50">
+              <Link to="/" className="hover:text-white transition-colors">Privacy Policy</Link>
+              <span className="text-white/20">·</span>
+              <Link to="/" className="hover:text-white transition-colors">Terms of Service</Link>
+            </div>
+            <div className="flex items-center gap-1.5" aria-label="Accepted payment methods">
+              {['VISA', 'Mastercard', 'AMEX', 'Stripe'].map((p) => (
+                <span
+                  key={p}
+                  className="px-2 py-1 rounded border border-white/15 bg-white/5 text-[10px] font-bold tracking-wide text-white/60"
+                >
+                  {p}
+                </span>
+              ))}
+            </div>
+          </div>
         </div>
       </footer>
     </div>
