@@ -188,17 +188,21 @@ stay logged in, the cookie fix + CORS are correct.
 ## Troubleshooting
 
 ### Client build fails: `Cannot find native binding` / `@rolldown/binding-linux-x64-gnu`
-Vite 8 uses Rolldown, which ships **platform-specific native binaries**. A
-`client/package-lock.json` generated on Windows triggers npm's optional-dependency bug
-(npm/cli#4828) and the Linux binary is skipped on Render. Fix by forcing a clean,
-platform-correct install — set the **client** Static Site **Build Command** to:
+Vite 8 uses Rolldown, which ships **platform-specific native binaries**. Two things
+combine to break the Linux build:
 
-```
-rm -rf node_modules package-lock.json && npm install && npm run build
-```
+1. **The lockfile is the root one, not the client one.** This is an npm **workspaces**
+   repo, so even when the build runs inside `client/`, npm walks up and uses the
+   **root `package-lock.json`**. A root lockfile generated on Windows triggers npm's
+   optional-dependency bug (npm/cli#4828) and the Linux binary is skipped.
+2. **Render caches `node_modules`.** A build log line like `up to date … in 1s` means the
+   cached (broken) `node_modules` was reused, so the binary never gets reinstalled.
 
-then **Clear build cache & deploy**. (Permanent alternative: delete the tracked
-`client/package-lock.json` from the repo and push — the root workspace lockfile is enough.)
+**Fix:** delete the tracked **root `package-lock.json`** and push, then on the client
+service do **Manual Deploy → Clear build cache & deploy**. With no lockfile and a cleared
+cache, npm resolves fresh on Linux and installs the correct binary. (You are on Windows, so
+a committed lockfile will always pin Windows binaries — leaving it out is the pragmatic fix.
+`server/package-lock.json` can stay; the server has no native dependencies.)
 
 ### API build fails: `tsc` type errors
 Make sure you've pushed the production-build fixes (the `MONGO_URI` fallback in

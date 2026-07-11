@@ -1,5 +1,9 @@
 node_modules/
 dist/
+# Lockfiles are intentionally not committed: this repo is developed on Windows but
+# deployed on Linux (Render), and a Windows-generated package-lock.json pins Windows-only
+# native binaries (e.g. Rolldown), breaking the Linux build (npm/cli#4828).
+package-lock.json
 .env
 .env.*
 !.env.example
