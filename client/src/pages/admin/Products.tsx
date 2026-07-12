@@ -263,6 +263,13 @@ const AdminProducts = () => {
       fd.append('variantImages', file);
     }
 
+    // Gallery images are sent on BOTH create and edit. On edit the server only
+    // replaces the gallery when at least one file is present, so an empty picker
+    // preserves the existing images.
+    for (const file of form.images.slice(0, 5)) {
+      fd.append('images', file);
+    }
+
     setSaving(true);
     try {
       if (editingProduct) {
@@ -271,9 +278,6 @@ const AdminProducts = () => {
         });
         addToast(`Product "${form.name}" updated.`, 'success');
       } else {
-        for (const file of form.images.slice(0, 5)) {
-          fd.append('images', file);
-        }
         await api.post('/products', fd, {
           headers: { 'Content-Type': 'multipart/form-data' },
         });
