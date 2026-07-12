@@ -3,6 +3,7 @@ import { ShoppingCart, Heart, Eye, Star } from 'lucide-react';
 import Button from './Button.js';
 import Badge from './Badge.js';
 import type { BadgeVariant } from './Badge.js';
+import { resolveGalleryImage } from '../../utils/productImage.js';
 
 export interface ProductVariant {
   sku: string;
@@ -51,6 +52,9 @@ const ProductCard: React.FC<ProductCardProps> = ({
 }) => {
   const [isHovered, setIsHovered] = useState(false);
 
+  // Hero image for the card: first usable gallery image (mock/broken URLs skipped)
+  const cardImage = resolveGalleryImage(product);
+
   // Use the first variant as the default showcase
   const defaultVariant = product.variants?.[0];
   const currentPriceCents = product.basePriceCents + (defaultVariant?.priceDeltaCents || 0);
@@ -85,9 +89,9 @@ const ProductCard: React.FC<ProductCardProps> = ({
     >
       {/* Thumbnail/Image Area (60% card height) */}
       <div className="h-48 bg-dashboard-section-bg/30 relative flex items-center justify-center overflow-hidden">
-        {product.images?.[0] ? (
+        {cardImage ? (
           <img
-            src={product.images[0].url}
+            src={cardImage}
             alt={product.name}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
           />

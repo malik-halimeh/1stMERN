@@ -9,6 +9,7 @@ import Button from '../../components/ui/Button';
 import Modal from '../../components/ui/Modal';
 import SearchBox from '../../components/ui/SearchBox';
 import { getApiErrorMessage } from '../../utils/apiError';
+import { isUsableImageUrl } from '../../utils/productImage';
 import { Package, Plus, Trash2 } from 'lucide-react';
 
 interface VariantImage {
@@ -59,6 +60,7 @@ interface VariantForm {
   costPrice: string; // dollars
   lowStockThreshold: string;
   imageFile: File | null; // newly chosen photo
+  imageUrl: string; // pasted image URL (alternative to a file)
   existingImage: VariantImage | null; // photo already on the server
   imagePreview: string; // object URL or existing URL for the thumbnail
 }
@@ -84,6 +86,7 @@ const EMPTY_VARIANT: VariantForm = {
   costPrice: '0',
   lowStockThreshold: '5',
   imageFile: null,
+  imageUrl: '',
   existingImage: null,
   imagePreview: '',
 };
@@ -198,8 +201,10 @@ const AdminProducts = () => {
         costPrice: ((v.costPriceCents ?? 0) / 100).toFixed(2),
         lowStockThreshold: String(v.lowStockThreshold),
         imageFile: null,
-        existingImage: v.image || null,
-        imagePreview: v.image?.url || '',
+        imageUrl: '',
+        // Drop unusable (mock/broken) stored images so saving self-heals them
+        existingImage: isUsableImageUrl(v.image?.url) ? v.image! : null,
+        imagePreview: isUsableImageUrl(v.image?.url) ? v.image!.url : '',
       })),
       images: [],
       imageUrlsText: '',
@@ -232,9 +237,12 @@ const AdminProducts = () => {
           costPriceCents: dollarsToCents(v.costPrice),
           lowStockThreshold: parseInt(v.lowStockThreshold) || 0,
         };
+        // Precedence: newly chosen file → pasted URL → existing stored photo.
         if (v.imageFile) {
           payload.imageSlot = files.length;
           files.push(v.imageFile);
+        } else if (v.imageUrl.trim()) {
+          payload.imageUrl = v.imageUrl.trim();
         } else if (v.existingImage) {
           payload.image = v.existingImage;
         }
@@ -677,18 +685,25 @@ const AdminProducts = () => {
                           const file = e.target.files?.[0] || null;
                           setVariant(idx, {
                             imageFile: file,
+                            // Choosing a file overrides any typed URL
+                            imageUrl: file ? '' : v.imageUrl,
                             imagePreview: file
                               ? URL.createObjectURL(file)
-                              : v.existingImage?.url || '',
+                              : v.imageUrl.trim() || v.existingImage?.url || '',
                           });
                         }}
                         className="block w-full text-sm text-text-secondary file:mr-3 file:rounded-btn file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white hover:file:bg-primary-dark"
                       />
-                      {(v.imageFile || v.existingImage) && (
+                      {(v.imageFile || v.imageUrl.trim() || v.existingImage) && (
                         <button
                           type="button"
                           onClick={() =>
-                            setVariant(idx, { imageFile: null, existingImage: null, imagePreview: '' })
+                            setVariant(idx, {
+                              imageFile: null,
+                              imageUrl: '',
+                              existingImage: null,
+                              imagePreview: '',
+                            })
                           }
                           className="text-xs font-semibold text-text-muted hover:text-danger whitespace-nowrap"
                         >
@@ -696,6 +711,24 @@ const AdminProducts = () => {
                         </button>
                       )}
                     </div>
+                    {/* …or paste an image URL instead of uploading a file */}
+                    <input
+                      type="url"
+                      value={v.imageUrl}
+                      onChange={(e) => {
+                        const url = e.target.value;
+                        setVariant(idx, {
+                          imageUrl: url,
+                          // Live-preview the URL only when no file is chosen
+                          imagePreview: v.imageFile
+                            ? v.imagePreview
+                            : url.trim() || v.existingImage?.url || '',
+                        });
+                      }}
+                      disabled={!!v.imageFile}
+                      placeholder="or paste an image URL (https://…)"
+                      className={`${inputClass} mt-2 disabled:opacity-50`}
+                    />
                   </div>
                 </div>
               ))}
@@ -707,16 +740,18 @@ const AdminProducts = () => {
             <label className="block text-label text-text-secondary mb-1">
               Images (up to 5)
             </label>
-            {editingProduct && editingProduct.images && editingProduct.images.length > 0 && (
+            {editingProduct && editingProduct.images?.some((img) => isUsableImageUrl(img.url)) && (
               <div className="mb-2 flex flex-wrap gap-2">
-                {editingProduct.images.map((img, i) => (
-                  <img
-                    key={i}
-                    src={img.url}
-                    alt=""
-                    className="h-12 w-12 rounded-btn object-cover border border-text-disabled"
-                  />
-                ))}
+                {editingProduct.images
+                  .filter((img) => isUsableImageUrl(img.url))
+                  .map((img, i) => (
+                    <img
+                      key={i}
+                      src={img.url}
+                      alt=""
+                      className="h-12 w-12 rounded-btn object-cover border border-text-disabled"
+                    />
+                  ))}
               </div>
             )}
             <input

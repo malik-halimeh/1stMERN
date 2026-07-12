@@ -129,7 +129,7 @@ const seed = async () => {
   // ──────────────────────────────────────────────────────────────────────────
   // 3. PRODUCTS — 12 products, 2-3 variants each
   // ──────────────────────────────────────────────────────────────────────────
-  const products = await Product.insertMany([
+  const productDefs: any[] = [
     // ── Refrigerators (6) ──
     {
       name: 'OptiCool FrostFree 500L',
@@ -321,7 +321,21 @@ const seed = async () => {
         { sku: 'OCDW-45-SS', color: 'Stainless Steel', stock: 9, priceDeltaCents: 3000, costPriceCents: 37000, lowStockThreshold: 5 },
       ],
     },
-  ]);
+  ];
+
+  // Give each variant of a multi-variant product its own photo, reusing the
+  // product's own (verified) gallery images so no new/unverified URLs are
+  // introduced. Single-variant products keep no variant image — for them the
+  // product gallery is the single source of truth.
+  for (const prod of productDefs) {
+    if (prod.variants.length >= 2 && prod.images.length > 0) {
+      prod.variants.forEach((v: any, i: number) => {
+        v.image = prod.images[i % prod.images.length];
+      });
+    }
+  }
+
+  const products = await Product.insertMany(productDefs);
   console.log('✓ Products seeded (12)');
 
   // Helpers

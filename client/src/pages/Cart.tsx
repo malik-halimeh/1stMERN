@@ -10,6 +10,7 @@ import { useAuth } from '../context/AuthContext.js';
 import { useShop } from '../context/ShopContext.js';
 import api from '../services/api.js';
 import { getApiErrorMessage } from '../utils/apiError.js';
+import { isUsableImageUrl } from '../utils/productImage.js';
 import { getGuestCartItems, setGuestCartItems } from '../utils/guestCart.js';
 
 // Shape returned by GET /cart — flattened, validated items
@@ -306,10 +307,10 @@ const Cart: React.FC = () => {
                     {/* Item Details */}
                     <div className="flex items-center gap-4 flex-grow text-left">
                       <div className="h-20 w-20 flex-shrink-0 bg-dashboard-section-bg rounded-lg flex items-center justify-center text-3xl border border-dashboard-section-bg/30 overflow-hidden">
-                        {item.thumbnail && item.thumbnail.startsWith('http') ? (
+                        {isUsableImageUrl(item.thumbnail) ? (
                           <img src={item.thumbnail} alt={item.name} className="h-full w-full object-cover" />
                         ) : (
-                          item.thumbnail || '🧊'
+                          '🧊'
                         )}
                       </div>
                       <div>

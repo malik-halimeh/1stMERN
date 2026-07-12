@@ -55,6 +55,8 @@ import NotificationBell from '../ui/NotificationBell.js';
 import { useAuth } from '../../context/AuthContext.js';
 import { useShop } from '../../context/ShopContext.js';
 import api from '../../services/api.js';
+import { resolveGalleryImage } from '../../utils/productImage.js';
+import type { ProductDoc } from '../ui/ProductCard.js';
 
 interface StorefrontLayoutProps {
   children: React.ReactNode;
@@ -153,26 +155,91 @@ const StorefrontLayout: React.FC<StorefrontLayoutProps> = ({ children, breadcrum
   const [searchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Live "as-you-type" suggestions shown under the search box
+  const [suggestions, setSuggestions] = useState<ProductDoc[]>([]);
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const suggestDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Keep the box in sync when the URL's search param changes (e.g. back button)
   useEffect(() => {
     setSearchQuery(searchParams.get('search') || '');
   }, [searchParams]);
 
-  const submitSearch = (e: React.FormEvent) => {
-    e.preventDefault();
+  // Debounced fetch of the top matches while typing. The server ranks results
+  // exact-name-first, so suggestions[0] is always the closest product.
+  useEffect(() => {
     const q = searchQuery.trim();
-    navigate(q ? `/products?search=${encodeURIComponent(q)}` : '/products');
+    if (suggestDebounce.current) clearTimeout(suggestDebounce.current);
+    if (!q) {
+      setSuggestions([]);
+      setActiveIndex(-1);
+      return;
+    }
+    suggestDebounce.current = setTimeout(async () => {
+      try {
+        const res = await api.get('/products', { params: { search: q, inStock: 1, limit: 6 } });
+        if (res.data?.success) {
+          setSuggestions(res.data.data);
+          setActiveIndex(-1);
+        }
+      } catch {
+        /* suggestions are best-effort; ignore transient errors */
+      }
+    }, 180);
+    return () => {
+      if (suggestDebounce.current) clearTimeout(suggestDebounce.current);
+    };
+  }, [searchQuery]);
+
+  const goToResults = (q: string) => {
+    setSearchFocused(false);
+    navigate(q.trim() ? `/products?search=${encodeURIComponent(q.trim())}` : '/products');
   };
 
+  const goToProduct = (slug: string) => {
+    setSearchFocused(false);
+    navigate(`/products/${slug}`);
+  };
+
+  const submitSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    goToResults(searchQuery);
+  };
+
+  const onSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!suggestions.length) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setActiveIndex((i) => Math.min(i + 1, suggestions.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveIndex((i) => Math.max(i - 1, -1));
+    } else if (e.key === 'Enter' && activeIndex >= 0) {
+      e.preventDefault();
+      goToProduct(suggestions[activeIndex].slug);
+    } else if (e.key === 'Escape') {
+      setSearchFocused(false);
+    }
+  };
+
+  const showSuggestions = searchFocused && searchQuery.trim().length > 0 && suggestions.length > 0;
+
   const searchBox = (
-    <form onSubmit={submitSearch} className="relative w-full" role="search">
+    <form onSubmit={submitSearch} className="relative w-full" role="search" autoComplete="off">
       <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-text-muted pointer-events-none" />
       <input
         type="search"
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
+        onFocus={() => setSearchFocused(true)}
+        onBlur={() => setTimeout(() => setSearchFocused(false), 150)}
+        onKeyDown={onSearchKeyDown}
         placeholder="Search appliances…"
         aria-label="Search products"
+        role="combobox"
+        aria-expanded={showSuggestions}
+        aria-controls="search-suggestions"
         className="w-full rounded-full border border-text-disabled bg-dashboard-section-bg/60 pl-10 pr-20 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent focus:bg-surface transition-colors [&::-webkit-search-cancel-button]:hidden"
       />
       {searchQuery && (
@@ -191,6 +258,61 @@ const StorefrontLayout: React.FC<StorefrontLayoutProps> = ({ children, breadcrum
       >
         Search
       </button>
+
+      {/* As-you-type suggestions */}
+      {showSuggestions && (
+        <div
+          id="search-suggestions"
+          role="listbox"
+          className="absolute left-0 right-0 top-full mt-2 bg-surface border border-dashboard-section-bg rounded-card shadow-level2 overflow-hidden z-50"
+        >
+          {suggestions.map((p, i) => {
+            const img = resolveGalleryImage(p);
+            return (
+              <button
+                key={p._id}
+                type="button"
+                role="option"
+                aria-selected={i === activeIndex}
+                // onMouseDown fires before the input's onBlur, so navigation isn't cancelled
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  goToProduct(p.slug);
+                }}
+                onMouseEnter={() => setActiveIndex(i)}
+                className={`flex items-center gap-3 w-full px-3 py-2 text-left transition-colors ${
+                  i === activeIndex ? 'bg-dashboard-section-bg/60' : 'hover:bg-dashboard-section-bg/40'
+                }`}
+              >
+                <span className="h-10 w-10 flex-shrink-0 rounded bg-dashboard-section-bg/50 flex items-center justify-center overflow-hidden">
+                  {img ? (
+                    <img src={img} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="text-base">🧊</span>
+                  )}
+                </span>
+                <span className="min-w-0 flex-grow">
+                  <span className="block text-sm font-medium text-text-primary truncate">{p.name}</span>
+                  {p.brand && <span className="block text-xs text-text-muted truncate">{p.brand}</span>}
+                </span>
+                <span className="text-sm font-semibold text-primary flex-shrink-0">
+                  ${(p.basePriceCents / 100).toFixed(2)}
+                </span>
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              goToResults(searchQuery);
+            }}
+            className="block w-full px-3 py-2 text-center text-xs font-semibold text-primary hover:bg-dashboard-section-bg/40 border-t border-dashboard-section-bg transition-colors"
+          >
+            See all results for “{searchQuery.trim()}”
+          </button>
+        </div>
+      )}
     </form>
   );
 

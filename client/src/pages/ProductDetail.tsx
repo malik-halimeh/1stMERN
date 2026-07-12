@@ -11,6 +11,7 @@ import { useToast } from '../context/ToastContext.js';
 import { useAuth } from '../context/AuthContext.js';
 import { useShop } from '../context/ShopContext.js';
 import api from '../services/api.js';
+import { resolveProductImage, isUsableImageUrl } from '../utils/productImage.js';
 import { Star, ShoppingCart, Heart, MessageSquare, ShieldCheck } from 'lucide-react';
 
 // ─── View event batching (module-level) ──────────────────────────────────────
@@ -62,6 +63,8 @@ const ProductDetail: React.FC = () => {
   const [product, setProduct] = useState<ProductDoc | null>(null);
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null);
   const [activeImage, setActiveImage] = useState<string>('');
+  // Tracks a failed image load so a 404 URL degrades to the placeholder
+  const [imageError, setImageError] = useState(false);
 
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'description' | 'specifications' | 'reviews'>('description');
@@ -99,7 +102,7 @@ const ProductDetail: React.FC = () => {
           if (prodData.variants?.length > 0) {
             setSelectedVariant(prodData.variants[0]);
           }
-          setActiveImage(prodData.variants?.[0]?.image?.url || prodData.images?.[0]?.url || '');
+          setActiveImage(resolveProductImage(prodData, prodData.variants?.[0]));
 
           // Track recently viewed local lists
           trackRecentlyViewed(prodData);
@@ -114,6 +117,11 @@ const ProductDetail: React.FC = () => {
     };
     if (slug) fetchProductDetails();
   }, [slug]);
+
+  // A newly selected image gets a fresh chance to load before we judge it broken
+  useEffect(() => {
+    setImageError(false);
+  }, [activeImage]);
 
   // Batched view-event tracking: enqueue on product load, flush after 10s or unload
   useEffect(() => {
@@ -326,19 +334,28 @@ const ProductDetail: React.FC = () => {
               onMouseMove={handleMouseMove}
               onMouseLeave={handleMouseLeave}
             >
-              <img src={activeImage} alt={product.name} className="w-full h-full object-contain p-4 group-hover:opacity-0 transition-opacity" />
-              
+              {activeImage && !imageError ? (
+                <img
+                  src={activeImage}
+                  alt={product.name}
+                  onError={() => setImageError(true)}
+                  className="w-full h-full object-contain p-4 group-hover:opacity-0 transition-opacity"
+                />
+              ) : (
+                <span className="text-display text-text-muted">🧊</span>
+              )}
+
               {/* Zoom Overlay panel */}
               <div
                 className="absolute inset-0 bg-no-repeat bg-[length:200%_200%] pointer-events-none"
                 style={zoomStyle}
               />
             </div>
-            
-            {/* Thumbnails list */}
-            {product.images?.length > 1 && (
+
+            {/* Thumbnails list — only usable images */}
+            {product.images?.filter((img) => isUsableImageUrl(img.url)).length > 1 && (
               <div className="flex gap-3 overflow-x-auto pb-1">
-                {product.images.map((img, idx) => (
+                {product.images.filter((img) => isUsableImageUrl(img.url)).map((img, idx) => (
                   <button
                     key={idx}
                     onClick={() => setActiveImage(img.url)}
@@ -412,8 +429,8 @@ const ProductDetail: React.FC = () => {
                         onClick={() => {
                           setSelectedVariant(v);
                           // Variant photo takes over the gallery; fall back to
-                          // the first product image for variants without one
-                          setActiveImage(v.image?.url || product.images?.[0]?.url || '');
+                          // the first product image for variants without a usable one
+                          setActiveImage(resolveProductImage(product, v));
                         }}
                         className={`text-xs px-3.5 py-2 rounded-btn border font-medium transition-all ${
                           selectedVariant?.sku === v.sku

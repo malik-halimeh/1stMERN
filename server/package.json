@@ -10,7 +10,8 @@
     "start": "node dist/server.js",
     "lint": "eslint . --ext .ts",
     "format": "prettier --write \"src/**/*.ts\"",
-    "seed": "tsx seed.ts"
+    "seed": "tsx seed.ts",
+    "update-media": "tsx scripts/updateProductMedia.ts"
   },
   "keywords": [
     "mern",

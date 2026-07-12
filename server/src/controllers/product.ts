@@ -123,28 +123,53 @@ export const getProducts = async (req: Request, res: Response, next: NextFunctio
       filter.ratingAvg = { $gte: parseFloat(rating as string) };
     }
 
-    // Full-Text Search index
+    // Sorting overrides (explicit sort wins over relevance ranking below)
     let sortOption: any = { createdAt: -1 };
-    if (search) {
-      filter.$text = { $search: String(search) };
-      sortOption = { score: { $meta: 'textScore' } };
-    }
+    if (sort === 'price_asc') sortOption = { basePriceCents: 1 };
+    else if (sort === 'price_desc') sortOption = { basePriceCents: -1 };
+    else if (sort === 'rating_desc') sortOption = { ratingAvg: -1 };
+    else if (sort === 'newest') sortOption = { createdAt: -1 };
 
-    // Sorting overrides
-    if (sort) {
-      if (sort === 'price_asc') sortOption = { basePriceCents: 1 };
-      else if (sort === 'price_desc') sortOption = { basePriceCents: -1 };
-      else if (sort === 'rating_desc') sortOption = { ratingAvg: -1 };
-      else if (sort === 'newest') sortOption = { createdAt: -1 };
+    // Search: substring (regex) match across name/brand/keywords/description so
+    // partial and as-you-type queries work — a $text index only matches whole
+    // words. Results are ranked exact-name → name-prefix → name-substring →
+    // brand → everything else, so the closest product always surfaces first.
+    let products;
+    if (search && String(search).trim()) {
+      const q = String(search).trim();
+      const safe = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const rx = new RegExp(safe, 'i');
+      filter.$or = [{ name: rx }, { brand: rx }, { searchKeywords: rx }, { description: rx }];
+
+      const rankSort = sort ? sortOption : { searchRank: 1, ratingAvg: -1, createdAt: -1 };
+
+      products = await Product.aggregate([
+        { $match: filter },
+        {
+          $addFields: {
+            searchRank: {
+              $switch: {
+                branches: [
+                  { case: { $eq: [{ $toLower: '$name' }, q.toLowerCase()] }, then: 0 },
+                  { case: { $regexMatch: { input: '$name', regex: `^${safe}`, options: 'i' } }, then: 1 },
+                  { case: { $regexMatch: { input: '$name', regex: safe, options: 'i' } }, then: 2 },
+                  { case: { $regexMatch: { input: { $ifNull: ['$brand', ''] }, regex: safe, options: 'i' } }, then: 3 },
+                ],
+                default: 4,
+              },
+            },
+          },
+        },
+        { $sort: rankSort },
+        { $skip: skip },
+        { $limit: limit },
+        { $project: { searchRank: 0 } },
+      ]);
+    } else {
+      products = await Product.find(filter).sort(sortOption).skip(skip).limit(limit);
     }
 
     const total = await Product.countDocuments(filter);
-    
-    // Perform search matching
-    const products = await Product.find(filter)
-      .sort(sortOption)
-      .skip(skip)
-      .limit(limit);
 
     res.status(200).json({
       success: true,
@@ -210,9 +235,9 @@ export const getProductsByIds = async (req: Request, res: Response, next: NextFu
 // Files parsed by the productUpload multer fields middleware
 type UploadedFilesMap = { [field: string]: Express.Multer.File[] } | undefined;
 
-// Upload variant image files and attach each to its variant: a variant whose
-// JSON carries `imageSlot: n` receives the n-th `variantImages` file. Variants
-// keeping an existing `image` object simply pass it through untouched.
+// Resolve each variant's image. Precedence: a freshly uploaded file
+// (`imageSlot: n` → n-th `variantImages` file) wins, else a pasted URL
+// (`imageUrl`), else any existing `image` object passes through untouched.
 const attachVariantImages = async (
   parsedVariants: any[],
   variantImageFiles: Express.Multer.File[]
@@ -224,8 +249,11 @@ const attachVariantImages = async (
   for (const v of parsedVariants) {
     if (typeof v.imageSlot === 'number' && uploads[v.imageSlot]) {
       v.image = uploads[v.imageSlot];
+    } else if (typeof v.imageUrl === 'string' && /^https?:\/\//i.test(v.imageUrl.trim())) {
+      v.image = { url: v.imageUrl.trim(), publicId: 'external' };
     }
     delete v.imageSlot;
+    delete v.imageUrl;
   }
 };
 

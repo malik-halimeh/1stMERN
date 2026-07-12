@@ -3,6 +3,7 @@ import api from '../services/api.js';
 import { useAuth } from './AuthContext.js';
 import { getGuestWishlist, addToGuestWishlist } from '../pages/Wishlist.js';
 import { addToGuestCart, getGuestCartCount } from '../utils/guestCart.js';
+import { resolveGalleryImage } from '../utils/productImage.js';
 
 // Shared storefront state: live cart item count (header badge) and the set of
 // wishlisted product ids, so every Add-to-Cart / Add-to-Wishlist button on any
@@ -83,7 +84,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
             name: product.name,
             brand: product.brand,
             slug: product.slug,
-            thumbnail: product.thumbnail || product.images?.[0]?.url || '',
+            thumbnail: resolveGalleryImage(product) || product.thumbnail || '',
             basePriceCents: product.basePriceCents,
             priceDeltaCents: variant.priceDeltaCents || 0,
             stock: variant.stock ?? 0,

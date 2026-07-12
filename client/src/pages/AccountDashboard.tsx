@@ -10,6 +10,7 @@ import { useToast } from '../context/ToastContext.js';
 import { useAuth } from '../context/AuthContext.js';
 import { useShop } from '../context/ShopContext.js';
 import api from '../services/api.js';
+import { resolveGalleryImage, isUsableImageUrl } from '../utils/productImage.js';
 
 type TabType = 'orders' | 'addresses' | 'wishlist' | 'details';
 
@@ -521,15 +522,15 @@ const AccountDashboard: React.FC = () => {
                     {wishlistItems.map((item: any) => {
                       const firstVariant = item.variants?.[0] || {};
                       const itemPrice = (item.basePriceCents || 0) + (firstVariant.priceDeltaCents || 0);
-                      const imageUrl = item.images?.[0]?.url || item.thumbnail;
+                      const imageUrl = resolveGalleryImage(item) || item.thumbnail;
                       return (
                         <div key={item._id} className="p-4 border border-dashboard-section-bg/50 rounded-card bg-surface flex flex-col justify-between hover:shadow-level1 transition-all">
                           <div className="flex gap-3">
                             <div className="h-16 w-16 bg-dashboard-section-bg rounded flex items-center justify-center text-2xl overflow-hidden">
-                              {imageUrl && String(imageUrl).startsWith('http') ? (
+                              {isUsableImageUrl(imageUrl) ? (
                                 <img src={imageUrl} alt={item.name} className="h-full w-full object-cover" />
                               ) : (
-                                imageUrl || '🧊'
+                                '🧊'
                               )}
                             </div>
                             <div className="text-left flex-grow">
