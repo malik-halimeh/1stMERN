@@ -50,7 +50,9 @@ export const getCart = async (req: Request, res: Response, next: NextFunction) =
         productName: product.name,
         brand: product.brand,
         slug: product.slug,
-        image: product.images[0]?.url || '',
+        // The purchased variant's default photo; falls back to the product's
+        // card image (first image of the first variant)
+        image: variant.images?.[0]?.url || product.variants[0]?.images?.[0]?.url || '',
         variantSku: item.variantSku,
         color: variant.color,
         size: variant.size,

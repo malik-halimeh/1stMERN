@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import api from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -10,7 +10,7 @@ import Modal from '../../components/ui/Modal';
 import SearchBox from '../../components/ui/SearchBox';
 import { getApiErrorMessage } from '../../utils/apiError';
 import { isUsableImageUrl } from '../../utils/productImage';
-import { Package, Plus, Trash2 } from 'lucide-react';
+import { GripVertical, ImagePlus, Link2, Package, Plus, RefreshCw, Trash2, X } from 'lucide-react';
 
 interface VariantImage {
   url: string;
@@ -26,7 +26,8 @@ interface Variant {
   priceDeltaCents: number;
   costPriceCents?: number;
   lowStockThreshold: number;
-  image?: VariantImage;
+  /** Ordered variant photos — images[0] is the variant's default image */
+  images?: VariantImage[];
 }
 
 interface ProductRow {
@@ -42,12 +43,23 @@ interface ProductRow {
   reviewCount?: number;
   isTrending?: boolean;
   isMostSelling?: boolean;
-  images?: { url: string; publicId: string }[];
 }
 
 interface CategoryOption {
   _id: string;
   name: string;
+}
+
+/**
+ * One image tile in a variant's ordered image list. Either a freshly chosen
+ * file (upload pending, previewed via an object URL) or an image that already
+ * has a real URL (stored on the server, or pasted by the admin).
+ */
+interface VariantImageEntry {
+  key: string; // stable local id for React keys and drag-reorder
+  file: File | null;
+  url: string; // object URL for files, the real URL otherwise
+  publicId?: string; // present for images already stored on the server
 }
 
 interface VariantForm {
@@ -59,10 +71,7 @@ interface VariantForm {
   priceDelta: string; // dollars
   costPrice: string; // dollars
   lowStockThreshold: string;
-  imageFile: File | null; // newly chosen photo
-  imageUrl: string; // pasted image URL (alternative to a file)
-  existingImage: VariantImage | null; // photo already on the server
-  imagePreview: string; // object URL or existing URL for the thumbnail
+  images: VariantImageEntry[]; // ordered — first image is the variant's default
 }
 
 interface ProductForm {
@@ -72,8 +81,6 @@ interface ProductForm {
   categoryId: string;
   basePrice: string; // dollars
   variants: VariantForm[];
-  images: File[];
-  imageUrlsText: string;
 }
 
 const EMPTY_VARIANT: VariantForm = {
@@ -85,10 +92,7 @@ const EMPTY_VARIANT: VariantForm = {
   priceDelta: '0',
   costPrice: '0',
   lowStockThreshold: '5',
-  imageFile: null,
-  imageUrl: '',
-  existingImage: null,
-  imagePreview: '',
+  images: [],
 };
 
 const EMPTY_FORM: ProductForm = {
@@ -98,14 +102,264 @@ const EMPTY_FORM: ProductForm = {
   categoryId: '',
   basePrice: '',
   variants: [{ ...EMPTY_VARIANT }],
-  images: [],
-  imageUrlsText: '',
 };
 
 const inputClass =
   'w-full rounded-input border border-text-disabled bg-background px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-primary';
 
 const dollarsToCents = (v: string) => Math.round(parseFloat(v || '0') * 100);
+
+// Matches the server's multer limit — oversized files used to surface as an
+// opaque 500 ("File too large"), so we reject them before the request now.
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+
+let imageEntryCounter = 0;
+const nextEntryKey = () => `img-${++imageEntryCounter}`;
+
+const fileEntry = (file: File): VariantImageEntry => ({
+  key: nextEntryKey(),
+  file,
+  url: URL.createObjectURL(file),
+});
+
+const urlEntry = (url: string, publicId?: string): VariantImageEntry => ({
+  key: nextEntryKey(),
+  file: null,
+  url,
+  publicId,
+});
+
+const releaseEntry = (entry: VariantImageEntry) => {
+  if (entry.file) URL.revokeObjectURL(entry.url);
+};
+
+/**
+ * Shopify-style image manager for one variant: ordered thumbnails with
+ * delete / replace / drag-reorder, plus the two ways to add images —
+ * upload from computer and paste an image URL ("Add by URL").
+ */
+const VariantImageManager = ({
+  images,
+  variantLabel,
+  onChange,
+}: {
+  images: VariantImageEntry[];
+  variantLabel: string;
+  onChange: (images: VariantImageEntry[]) => void;
+}) => {
+  const { addToast } = useToast();
+  const [urlDraft, setUrlDraft] = useState('');
+  const addInputRef = useRef<HTMLInputElement>(null);
+  const replaceInputRef = useRef<HTMLInputElement>(null);
+  const replaceIndexRef = useRef<number>(-1);
+  // Index of the tile being dragged; live-reordered as it passes over others
+  const dragIndexRef = useRef<number>(-1);
+  const [dragging, setDragging] = useState(false);
+
+  const acceptFiles = (fileList: FileList | null): File[] => {
+    const files = Array.from(fileList || []);
+    const ok = files.filter((f) => f.size <= MAX_IMAGE_BYTES);
+    if (ok.length < files.length) {
+      addToast('Some images were skipped — each image must be 5 MB or smaller.', 'error');
+    }
+    return ok;
+  };
+
+  const handleAddFiles = (fileList: FileList | null) => {
+    const files = acceptFiles(fileList);
+    if (files.length > 0) onChange([...images, ...files.map(fileEntry)]);
+  };
+
+  const handleAddUrl = () => {
+    const url = urlDraft.trim();
+    if (!/^https?:\/\//i.test(url)) {
+      addToast('Enter a valid image URL starting with http:// or https://.', 'error');
+      return;
+    }
+    onChange([...images, urlEntry(url)]);
+    setUrlDraft('');
+  };
+
+  const handleDelete = (idx: number) => {
+    releaseEntry(images[idx]);
+    onChange(images.filter((_, i) => i !== idx));
+  };
+
+  const handleReplace = (fileList: FileList | null) => {
+    const [file] = acceptFiles(fileList);
+    const idx = replaceIndexRef.current;
+    if (!file || idx < 0 || idx >= images.length) return;
+    releaseEntry(images[idx]);
+    onChange(images.map((entry, i) => (i === idx ? fileEntry(file) : entry)));
+  };
+
+  const moveImage = (from: number, to: number) => {
+    if (to < 0 || to >= images.length || from === to) return;
+    const next = [...images];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    onChange(next);
+  };
+
+  return (
+    <div>
+      <label className="block text-label text-text-secondary mb-1">Variant images</label>
+
+      {images.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-2">
+          {images.map((entry, idx) => (
+            <div
+              key={entry.key}
+              draggable
+              onDragStart={(e) => {
+                dragIndexRef.current = idx;
+                setDragging(true);
+                e.dataTransfer.effectAllowed = 'move';
+              }}
+              onDragEnter={() => {
+                const from = dragIndexRef.current;
+                if (from !== -1 && from !== idx) {
+                  moveImage(from, idx);
+                  dragIndexRef.current = idx;
+                }
+              }}
+              onDragOver={(e) => e.preventDefault()}
+              onDragEnd={() => {
+                dragIndexRef.current = -1;
+                setDragging(false);
+              }}
+              className={`relative group/img h-20 w-20 rounded-lg border bg-surface overflow-hidden cursor-grab active:cursor-grabbing ${
+                dragging && dragIndexRef.current === idx
+                  ? 'border-primary shadow-level1 opacity-70'
+                  : 'border-dashboard-section-bg'
+              }`}
+            >
+              <img
+                src={entry.url}
+                alt={`${variantLabel} image ${idx + 1}`}
+                className="h-full w-full object-cover pointer-events-none"
+              />
+              {idx === 0 && (
+                <span className="absolute bottom-0 inset-x-0 bg-primary/80 text-white text-[8px] font-bold uppercase text-center py-0.5 pointer-events-none">
+                  Default
+                </span>
+              )}
+              {/* Hover controls: drag handle, replace, delete */}
+              <div className="absolute inset-0 bg-text-primary/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-start justify-between p-1">
+                <GripVertical className="h-3.5 w-3.5 text-white/90 mt-0.5" aria-hidden />
+                <div className="flex gap-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      replaceIndexRef.current = idx;
+                      replaceInputRef.current?.click();
+                    }}
+                    className="p-1 rounded bg-white/90 text-text-primary hover:bg-white"
+                    title="Replace image"
+                    aria-label={`Replace ${variantLabel} image ${idx + 1}`}
+                  >
+                    <RefreshCw className="h-3 w-3" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(idx)}
+                    className="p-1 rounded bg-white/90 text-danger hover:bg-white"
+                    title="Delete image"
+                    aria-label={`Delete ${variantLabel} image ${idx + 1}`}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              </div>
+              {/* Keyboard-accessible reorder (drag alternative) */}
+              <div className="absolute bottom-0 right-0 hidden group-hover/img:flex">
+                <button
+                  type="button"
+                  onClick={() => moveImage(idx, idx - 1)}
+                  disabled={idx === 0}
+                  className="px-1 bg-white/90 text-[10px] font-bold text-text-primary disabled:opacity-30 rounded-tl"
+                  aria-label={`Move ${variantLabel} image ${idx + 1} earlier`}
+                >
+                  ←
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moveImage(idx, idx + 1)}
+                  disabled={idx === images.length - 1}
+                  className="px-1 bg-white/90 text-[10px] font-bold text-text-primary disabled:opacity-30"
+                  aria-label={`Move ${variantLabel} image ${idx + 1} later`}
+                >
+                  →
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex flex-col sm:flex-row gap-2">
+        <button
+          type="button"
+          onClick={() => addInputRef.current?.click()}
+          className="flex items-center justify-center gap-1.5 rounded-btn border border-dashed border-text-disabled px-3 py-2 text-xs font-semibold text-text-secondary hover:border-primary hover:text-primary transition-colors"
+        >
+          <ImagePlus className="h-3.5 w-3.5" /> Upload images
+        </button>
+        <div className="flex flex-grow gap-2">
+          <input
+            type="url"
+            value={urlDraft}
+            onChange={(e) => setUrlDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleAddUrl();
+              }
+            }}
+            placeholder="https://… paste an image URL"
+            className={`${inputClass} flex-grow`}
+            aria-label={`${variantLabel} image URL`}
+          />
+          <button
+            type="button"
+            onClick={handleAddUrl}
+            disabled={!urlDraft.trim()}
+            className="flex items-center gap-1 rounded-btn bg-primary px-3 py-2 text-xs font-semibold text-white hover:bg-primary-dark disabled:opacity-40 whitespace-nowrap"
+          >
+            <Link2 className="h-3.5 w-3.5" /> Add by URL
+          </button>
+        </div>
+      </div>
+      <p className="mt-1 text-caption text-text-muted">
+        The first image is the variant's default photo. Drag thumbnails to reorder. Up to 5 MB per
+        file.
+      </p>
+
+      {/* Hidden pickers: bulk add + targeted replace */}
+      <input
+        ref={addInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        hidden
+        onChange={(e) => {
+          handleAddFiles(e.target.files);
+          e.target.value = '';
+        }}
+      />
+      <input
+        ref={replaceInputRef}
+        type="file"
+        accept="image/*"
+        hidden
+        onChange={(e) => {
+          handleReplace(e.target.files);
+          e.target.value = '';
+        }}
+      />
+    </div>
+  );
+};
 
 const AdminProducts = () => {
   const { user } = useAuth();
@@ -200,16 +454,19 @@ const AdminProducts = () => {
         priceDelta: (v.priceDeltaCents / 100).toFixed(2),
         costPrice: ((v.costPriceCents ?? 0) / 100).toFixed(2),
         lowStockThreshold: String(v.lowStockThreshold),
-        imageFile: null,
-        imageUrl: '',
         // Drop unusable (mock/broken) stored images so saving self-heals them
-        existingImage: isUsableImageUrl(v.image?.url) ? v.image! : null,
-        imagePreview: isUsableImageUrl(v.image?.url) ? v.image!.url : '',
+        images: (v.images || [])
+          .filter((img) => isUsableImageUrl(img.url))
+          .map((img) => urlEntry(img.url, img.publicId)),
       })),
-      images: [],
-      imageUrlsText: '',
     });
     setModalOpen(true);
+  };
+
+  // Release object-URL previews for any not-yet-uploaded files on close
+  const closeModal = () => {
+    form.variants.forEach((v) => v.images.forEach(releaseEntry));
+    setModalOpen(false);
   };
 
   const setVariant = (idx: number, patch: Partial<VariantForm>) => {
@@ -219,35 +476,29 @@ const AdminProducts = () => {
     }));
   };
 
-  // Variants JSON + the new photo files. A variant with a fresh file gets an
-  // imageSlot index (the server matches slot n → n-th variantImages file);
-  // one keeping its stored photo passes the existing image object through.
+  // Variants JSON + the new photo files. Each variant sends its ordered
+  // `images` list: fresh files become { fileSlot: n } (the server matches
+  // slot n → n-th variantImages file); stored images and pasted URLs ride
+  // as { url, publicId } — so the admin-arranged order is preserved exactly.
   const buildVariantsPayload = () => {
     const files: File[] = [];
     const variants = form.variants
       .filter((v) => v.sku.trim())
-      .map((v) => {
-        const payload: Record<string, unknown> = {
-          sku: v.sku.trim(),
-          color: v.color.trim() || undefined,
-          capacity: v.capacity.trim() || undefined,
-          size: v.size.trim() || undefined,
-          stock: parseInt(v.stock) || 0,
-          priceDeltaCents: dollarsToCents(v.priceDelta),
-          costPriceCents: dollarsToCents(v.costPrice),
-          lowStockThreshold: parseInt(v.lowStockThreshold) || 0,
-        };
-        // Precedence: newly chosen file → pasted URL → existing stored photo.
-        if (v.imageFile) {
-          payload.imageSlot = files.length;
-          files.push(v.imageFile);
-        } else if (v.imageUrl.trim()) {
-          payload.imageUrl = v.imageUrl.trim();
-        } else if (v.existingImage) {
-          payload.image = v.existingImage;
-        }
-        return payload;
-      });
+      .map((v) => ({
+        sku: v.sku.trim(),
+        color: v.color.trim() || undefined,
+        capacity: v.capacity.trim() || undefined,
+        size: v.size.trim() || undefined,
+        stock: parseInt(v.stock) || 0,
+        priceDeltaCents: dollarsToCents(v.priceDelta),
+        costPriceCents: dollarsToCents(v.costPrice),
+        lowStockThreshold: parseInt(v.lowStockThreshold) || 0,
+        images: v.images.map((entry) =>
+          entry.file
+            ? { fileSlot: files.push(entry.file) - 1 }
+            : { url: entry.url, publicId: entry.publicId }
+        ),
+      }));
     return { variants, files };
   };
 
@@ -263,7 +514,7 @@ const AdminProducts = () => {
     }
 
     // Both create and update are multipart: variants ride as a JSON string
-    // beside the gallery images (create only) and per-variant photo files
+    // beside their photo files (referenced by fileSlot index)
     const fd = new FormData();
     fd.append('name', form.name);
     if (form.brand) fd.append('brand', form.brand);
@@ -273,16 +524,6 @@ const AdminProducts = () => {
     fd.append('variants', JSON.stringify(variants));
     for (const file of variantImageFiles) {
       fd.append('variantImages', file);
-    }
-
-    // Gallery: send uploaded files and/or pasted URLs (both create and edit).
-    // On edit the server only rebuilds the gallery when at least one file or URL
-    // is present, so leaving both empty preserves the existing images.
-    for (const file of form.images.slice(0, 5)) {
-      fd.append('images', file);
-    }
-    if (form.imageUrlsText.trim()) {
-      fd.append('imageUrls', form.imageUrlsText.trim());
     }
 
     setSaving(true);
@@ -298,7 +539,7 @@ const AdminProducts = () => {
         });
         addToast(`Product "${form.name}" created.`, 'success');
       }
-      setModalOpen(false);
+      closeModal();
       await fetchProducts();
     } catch (err) {
       addToast(getApiErrorMessage(err, 'Failed to save product.'), 'error');
@@ -469,11 +710,11 @@ const AdminProducts = () => {
       {/* Create / Edit modal */}
       <Modal
         isOpen={modalOpen}
-        onClose={() => setModalOpen(false)}
+        onClose={closeModal}
         title={editingProduct ? `Edit ${editingProduct.name}` : 'Add Product'}
         footer={
           <div className="flex justify-end gap-2">
-            <Button variant="ghost" onClick={() => setModalOpen(false)}>
+            <Button variant="ghost" onClick={closeModal}>
               Cancel
             </Button>
             <Button variant="primary" onClick={handleSave} disabled={saving}>
@@ -665,125 +906,18 @@ const AdminProducts = () => {
                     </div>
                   </div>
 
-                  {/* Per-variant photo (shown on the storefront when the variant is selected) */}
-                  <div>
-                    <label className="block text-label text-text-secondary mb-1">
-                      Variant image
-                    </label>
-                    <div className="flex items-center gap-3">
-                      {v.imagePreview && (
-                        <img
-                          src={v.imagePreview}
-                          alt={`Variant ${idx + 1}`}
-                          className="h-12 w-12 rounded-lg object-cover border border-dashboard-section-bg bg-surface flex-shrink-0"
-                        />
-                      )}
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0] || null;
-                          setVariant(idx, {
-                            imageFile: file,
-                            // Choosing a file overrides any typed URL
-                            imageUrl: file ? '' : v.imageUrl,
-                            imagePreview: file
-                              ? URL.createObjectURL(file)
-                              : v.imageUrl.trim() || v.existingImage?.url || '',
-                          });
-                        }}
-                        className="block w-full text-sm text-text-secondary file:mr-3 file:rounded-btn file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white hover:file:bg-primary-dark"
-                      />
-                      {(v.imageFile || v.imageUrl.trim() || v.existingImage) && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setVariant(idx, {
-                              imageFile: null,
-                              imageUrl: '',
-                              existingImage: null,
-                              imagePreview: '',
-                            })
-                          }
-                          className="text-xs font-semibold text-text-muted hover:text-danger whitespace-nowrap"
-                        >
-                          Remove image
-                        </button>
-                      )}
-                    </div>
-                    {/* …or paste an image URL instead of uploading a file */}
-                    <input
-                      type="url"
-                      value={v.imageUrl}
-                      onChange={(e) => {
-                        const url = e.target.value;
-                        setVariant(idx, {
-                          imageUrl: url,
-                          // Live-preview the URL only when no file is chosen
-                          imagePreview: v.imageFile
-                            ? v.imagePreview
-                            : url.trim() || v.existingImage?.url || '',
-                        });
-                      }}
-                      disabled={!!v.imageFile}
-                      placeholder="or paste an image URL (https://…)"
-                      className={`${inputClass} mt-2 disabled:opacity-50`}
-                    />
-                  </div>
+                  {/* Ordered variant photos — the product's only image source.
+                      The first variant's first image is the storefront card image. */}
+                  <VariantImageManager
+                    images={v.images}
+                    variantLabel={v.color.trim() || v.sku.trim() || `Variant ${idx + 1}`}
+                    onChange={(images) => setVariant(idx, { images })}
+                  />
                 </div>
               ))}
             </div>
-          </div>
-
-          {/* Images — upload files and/or paste image URL(s); works on create + edit */}
-          <div>
-            <label className="block text-label text-text-secondary mb-1">
-              Images (up to 5)
-            </label>
-            {editingProduct && editingProduct.images?.some((img) => isUsableImageUrl(img.url)) && (
-              <div className="mb-2 flex flex-wrap gap-2">
-                {editingProduct.images
-                  .filter((img) => isUsableImageUrl(img.url))
-                  .map((img, i) => (
-                    <img
-                      key={i}
-                      src={img.url}
-                      alt=""
-                      className="h-12 w-12 rounded-btn object-cover border border-text-disabled"
-                    />
-                  ))}
-              </div>
-            )}
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={(e) =>
-                setForm({ ...form, images: Array.from(e.target.files || []).slice(0, 5) })
-              }
-              className="block w-full text-sm text-text-secondary file:mr-3 file:rounded-btn file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white hover:file:bg-primary-dark"
-            />
-            {form.images.length > 0 && (
-              <p className="mt-1 text-caption text-text-muted">
-                {form.images.length} file{form.images.length === 1 ? '' : 's'} selected
-              </p>
-            )}
-            <div className="mt-2">
-              <label className="block text-label text-text-secondary mb-1">
-                …or paste image URL(s)
-              </label>
-              <textarea
-                rows={2}
-                value={form.imageUrlsText}
-                onChange={(e) => setForm({ ...form, imageUrlsText: e.target.value })}
-                placeholder="https://example.com/photo.jpg — one per line or comma-separated"
-                className={inputClass}
-              />
-            </div>
-            <p className="mt-1 text-caption text-text-muted">
-              {editingProduct
-                ? 'Uploading files or pasting URL(s) replaces the current gallery. Leave both empty to keep the current images.'
-                : 'You can upload files and/or paste image URLs.'}
+            <p className="mt-2 text-caption text-text-muted">
+              Product cards across the store show the first image of the first variant.
             </p>
           </div>
         </div>

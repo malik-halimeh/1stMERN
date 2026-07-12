@@ -14,8 +14,14 @@ export interface IVariant {
   priceDeltaCents: number;
   costPriceCents: number;
   lowStockThreshold: number;
-  /** Optional variant-specific photo shown when the variant is selected */
-  image?: IImage;
+  /**
+   * Ordered variant photos — the ONLY image source in the catalog.
+   * images[0] is the variant's default photo; the first variant's images[0]
+   * is the product's card/thumbnail image everywhere on the storefront.
+   * (The legacy standalone product gallery and single variant.image were
+   * migrated into this array — see scripts/migrateVariantImages.ts.)
+   */
+  images: IImage[];
 }
 
 export interface IMeta {
@@ -34,7 +40,6 @@ export interface IProduct extends Document {
   categoryId: mongoose.Types.ObjectId;
   basePriceCents: number;
   variants: IVariant[];
-  images: IImage[];
   ratingAvg: number;
   reviewCount: number;
   isTrending: boolean;
@@ -59,7 +64,7 @@ const VariantSchema = new Schema<IVariant>({
   priceDeltaCents: { type: Number, required: true, default: 0 },
   costPriceCents: { type: Number, required: true, min: 0 },
   lowStockThreshold: { type: Number, required: true, default: 10 },
-  image: { type: ImageSchema, required: false },
+  images: { type: [ImageSchema], default: [] },
 });
 
 const MetaSchema = new Schema<IMeta>({
@@ -90,7 +95,6 @@ const ProductSchema = new Schema<IProduct>(
     },
     basePriceCents: { type: Number, required: true, min: 0 },
     variants: [VariantSchema],
-    images: [ImageSchema],
     ratingAvg: { type: Number, default: 0, min: 0, max: 5 },
     reviewCount: { type: Number, default: 0, min: 0 },
     isTrending: { type: Boolean, default: false, required: true },

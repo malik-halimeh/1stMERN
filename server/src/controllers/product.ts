@@ -9,32 +9,10 @@ import User from '../models/User.js';
 import { uploadImageBuffer } from '../config/cloudinary.js';
 import { AppError } from '../utils/errors.js';
 
-// Accepts image URLs pasted into the admin form — a JSON array string, a
-// comma/newline-separated string, or an array — and returns clean http(s) URLs.
-// URL images carry publicId 'external' so we never try to delete them from Cloudinary.
-const parseImageUrls = (raw: unknown): { url: string; publicId: string }[] => {
-  if (!raw) return [];
-  let list: unknown[] = [];
-  if (Array.isArray(raw)) {
-    list = raw;
-  } else if (typeof raw === 'string' && raw.trim()) {
-    const s = raw.trim();
-    if (s.startsWith('[')) {
-      try {
-        list = JSON.parse(s);
-      } catch {
-        list = [];
-      }
-    } else {
-      list = s.split(/[\n,]+/);
-    }
-  }
-  return list
-    .map((u) => String(u).trim())
-    .filter((u) => /^https?:\/\//i.test(u))
-    .slice(0, 5)
-    .map((url) => ({ url, publicId: 'external' }));
-};
+// Every catalog image lives on a variant as an ordered `images` array —
+// images[0] is the variant's default photo and the first variant's images[0]
+// is the product's card image storefront-wide. There is no standalone
+// product gallery anymore.
 
 // Helper to trigger stock alerts gracefully
 const checkAndTriggerLowStock = async (
@@ -223,7 +201,7 @@ export const getProductsByIds = async (req: Request, res: Response, next: NextFu
     }
 
     const products = await Product.find({ _id: { $in: validIds } }).select(
-      'name slug brand basePriceCents variants images ratingAvg reviewCount thumbnail isTrending isMostSelling'
+      'name slug brand basePriceCents variants ratingAvg reviewCount isTrending isMostSelling'
     );
 
     res.status(200).json({ success: true, data: products });
@@ -235,23 +213,59 @@ export const getProductsByIds = async (req: Request, res: Response, next: NextFu
 // Files parsed by the productUpload multer fields middleware
 type UploadedFilesMap = { [field: string]: Express.Multer.File[] } | undefined;
 
-// Resolve each variant's image. Precedence: a freshly uploaded file
-// (`imageSlot: n` → n-th `variantImages` file) wins, else a pasted URL
-// (`imageUrl`), else any existing `image` object passes through untouched.
+// Resolve each variant's ordered image list. The client sends every variant
+// with an `images` array whose entries are either:
+//   { fileSlot: n }            — the n-th uploaded `variantImages` file
+//   { url, publicId? }         — an existing stored image or a pasted URL
+// Order in the array is the display order the admin arranged, so it is
+// preserved verbatim. Files are uploaded to Cloudinary once, then slotted in.
+// Pasted / external URLs are stored with publicId 'external' so we never try
+// to delete them from Cloudinary; the frontend renders both identically.
 const attachVariantImages = async (
   parsedVariants: any[],
   variantImageFiles: Express.Multer.File[]
 ) => {
   const uploads: { url: string; publicId: string }[] = [];
   for (const file of variantImageFiles) {
-    uploads.push(await uploadImageBuffer(file.buffer));
+    try {
+      uploads.push(await uploadImageBuffer(file.buffer));
+    } catch (err: any) {
+      // Surface Cloudinary failures (bad credentials, network, …) as a clear
+      // client-visible error instead of an opaque 500
+      throw new AppError(
+        'UPLOAD_FAILED',
+        `Image upload to Cloudinary failed: ${err?.message || 'unknown error'}`,
+        502
+      );
+    }
   }
   for (const v of parsedVariants) {
-    if (typeof v.imageSlot === 'number' && uploads[v.imageSlot]) {
-      v.image = uploads[v.imageSlot];
-    } else if (typeof v.imageUrl === 'string' && /^https?:\/\//i.test(v.imageUrl.trim())) {
-      v.image = { url: v.imageUrl.trim(), publicId: 'external' };
+    const entries = Array.isArray(v.images) ? v.images : [];
+    const images: { url: string; publicId: string }[] = [];
+    for (const entry of entries) {
+      if (entry && typeof entry.fileSlot === 'number') {
+        const uploaded = uploads[entry.fileSlot];
+        if (!uploaded) {
+          throw new AppError(
+            'VALIDATION_FAILED',
+            `Variant "${v.sku}" references uploaded image #${entry.fileSlot + 1}, but that file was not received.`,
+            422
+          );
+        }
+        images.push(uploaded);
+      } else if (entry && typeof entry.url === 'string' && /^https?:\/\//i.test(entry.url.trim())) {
+        images.push({ url: entry.url.trim(), publicId: entry.publicId || 'external' });
+      } else if (entry) {
+        throw new AppError(
+          'VALIDATION_FAILED',
+          `Variant "${v.sku}" has an invalid image entry — expected an uploaded file or an http(s) URL.`,
+          422
+        );
+      }
     }
+    v.images = images;
+    // Legacy single-image fields are no longer accepted
+    delete v.image;
     delete v.imageSlot;
     delete v.imageUrl;
   }
@@ -308,23 +322,9 @@ export const createProduct = async (req: Request, res: Response, next: NextFunct
       parsedMeta = meta;
     }
 
-    // Process uploaded images via Multer buffer files (fields middleware)
+    // Variant images: uploaded files ride in the `variantImages` multipart
+    // field; ordering + URL entries come from each variant's `images` array
     const filesMap = req.files as UploadedFilesMap;
-    const imageFiles = filesMap?.images;
-    const images: { url: string; publicId: string }[] = [];
-
-    if (imageFiles && imageFiles.length > 0) {
-      for (const file of imageFiles) {
-        const result = await uploadImageBuffer(file.buffer);
-        images.push(result);
-      }
-    }
-
-    // Also accept image URLs pasted into the form (no Cloudinary upload needed)
-    images.push(...parseImageUrls(req.body.imageUrls));
-    images.splice(5); // cap the gallery at 5
-
-    // Per-variant photos (optional, matched by imageSlot index)
     await attachVariantImages(parsedVariants, filesMap?.variantImages || []);
 
     const basePrice = parseInt(basePriceCents);
@@ -340,7 +340,6 @@ export const createProduct = async (req: Request, res: Response, next: NextFunct
       categoryId: new mongoose.Types.ObjectId(categoryId),
       basePriceCents: basePrice,
       variants: parsedVariants,
-      images,
       searchKeywords: parsedKeywords,
       meta: parsedMeta,
       ratingAvg: 0,
@@ -419,21 +418,6 @@ export const updateProduct = async (req: Request, res: Response, next: NextFunct
 
     if (meta) {
       product.meta = { ...product.meta, ...meta };
-    }
-
-    // Rebuild the gallery from newly uploaded files and/or pasted URLs. If neither
-    // is provided we leave the existing gallery untouched (so editing other fields
-    // never wipes the images).
-    const editFilesMap = req.files as UploadedFilesMap;
-    const newImageFiles = editFilesMap?.images || [];
-    const urlImages = parseImageUrls(req.body.imageUrls);
-    if (newImageFiles.length > 0 || urlImages.length > 0) {
-      const rebuilt: { url: string; publicId: string }[] = [];
-      for (const file of newImageFiles.slice(0, 5)) {
-        rebuilt.push(await uploadImageBuffer(file.buffer));
-      }
-      rebuilt.push(...urlImages);
-      product.set('images', rebuilt.slice(0, 5));
     }
 
     // Track stock updates for audit logs

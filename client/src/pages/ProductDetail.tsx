@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import StorefrontLayout from '../components/layout/StorefrontLayout.js';
 import Skeleton from '../components/ui/Skeleton.js';
@@ -11,8 +11,12 @@ import { useToast } from '../context/ToastContext.js';
 import { useAuth } from '../context/AuthContext.js';
 import { useShop } from '../context/ShopContext.js';
 import api from '../services/api.js';
-import { resolveProductImage, isUsableImageUrl } from '../utils/productImage.js';
-import { Star, ShoppingCart, Heart, MessageSquare, ShieldCheck } from 'lucide-react';
+import { flattenVariantGallery } from '../utils/productImage.js';
+import { Star, ShoppingCart, Heart, MessageSquare, ShieldCheck, ChevronLeft, ChevronRight } from 'lucide-react';
+
+// Human label for a variant (used for alt text and ARIA)
+const variantLabel = (v?: ProductVariant | null): string =>
+  [v?.color, v?.capacity, v?.size].filter(Boolean).join(' ') || v?.sku || '';
 
 // ─── View event batching (module-level) ──────────────────────────────────────
 // Events are buffered here; flushed after FLUSH_DELAY_MS of inactivity OR on page unload.
@@ -61,10 +65,56 @@ const ProductDetail: React.FC = () => {
   const { addItemToCart, addItemToWishlist, isInWishlist } = useShop();
 
   const [product, setProduct] = useState<ProductDoc | null>(null);
-  const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null);
-  const [activeImage, setActiveImage] = useState<string>('');
+  // Gallery and variant selection are bidirectionally synced: picking a
+  // variant jumps the gallery to that variant's first image, and navigating
+  // the gallery into another variant's images selects that variant. Both
+  // indices are always updated together in goToImage/selectVariant, so they
+  // can never drift apart.
+  const [selectedVariantIdx, setSelectedVariantIdx] = useState(0);
+  const [activeImageIdx, setActiveImageIdx] = useState(0);
   // Tracks a failed image load so a 404 URL degrades to the placeholder
   const [imageError, setImageError] = useState(false);
+
+  // One continuous gallery: every variant's images in variant order, each
+  // entry tagged with its owning variant (memoized — computed once per product)
+  const gallery = useMemo(() => flattenVariantGallery(product), [product]);
+  const selectedVariant: ProductVariant | null =
+    product?.variants?.[selectedVariantIdx] ?? null;
+  const activeImage = gallery[activeImageIdx]?.url || '';
+
+  // Gallery → variant: showing an image selects the variant it belongs to
+  const goToImage = useCallback(
+    (idx: number) => {
+      const entry = gallery[idx];
+      if (!entry) return;
+      setActiveImageIdx(idx);
+      setSelectedVariantIdx(entry.variantIndex);
+    },
+    [gallery]
+  );
+
+  // Variant → gallery: selecting a variant jumps to its first image
+  // (admin-defined order; a variant without images keeps the current view)
+  const selectVariant = useCallback(
+    (variantIdx: number) => {
+      setSelectedVariantIdx(variantIdx);
+      const firstIdx = gallery.findIndex((e) => e.variantIndex === variantIdx);
+      if (firstIdx !== -1) setActiveImageIdx(firstIdx);
+    },
+    [gallery]
+  );
+
+  // Touch swiping on the main image
+  const touchStartX = useRef<number | null>(null);
+  // Keep the active thumbnail visible as the gallery moves
+  const thumbRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  useEffect(() => {
+    thumbRefs.current[activeImageIdx]?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'nearest',
+      inline: 'nearest',
+    });
+  }, [activeImageIdx]);
 
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'description' | 'specifications' | 'reviews'>('description');
@@ -97,12 +147,11 @@ const ProductDetail: React.FC = () => {
         if (res.data?.success) {
           const prodData = res.data.data;
           setProduct(prodData);
-          
-          // Select default variant and default active image (variant photo wins)
-          if (prodData.variants?.length > 0) {
-            setSelectedVariant(prodData.variants[0]);
-          }
-          setActiveImage(resolveProductImage(prodData, prodData.variants?.[0]));
+
+          // Default: first variant, first image (the gallery derives from
+          // the product, so resetting both indices lands on variant 1 image 1)
+          setSelectedVariantIdx(0);
+          setActiveImageIdx(0);
 
           // Track recently viewed local lists
           trackRecentlyViewed(prodData);
@@ -327,17 +376,40 @@ const ProductDetail: React.FC = () => {
         {/* Detail Panel */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
           
-          {/* LEFT: Image Gallery w/ Zoom */}
+          {/* LEFT: Variant-aware image gallery w/ zoom, swipe and keyboard nav.
+              All variants' images form one continuous gallery; swiping into
+              another variant's images selects that variant automatically. */}
           <div className="flex flex-col gap-4">
             <div
-              className="relative border border-dashboard-section-bg/50 rounded-card overflow-hidden bg-dashboard-section-bg/10 flex items-center justify-center cursor-zoom-in group h-[300px] sm:h-[400px]"
+              className="relative border border-dashboard-section-bg/50 rounded-card overflow-hidden bg-dashboard-section-bg/10 flex items-center justify-center cursor-zoom-in group h-[300px] sm:h-[400px] focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               onMouseMove={handleMouseMove}
               onMouseLeave={handleMouseLeave}
+              onTouchStart={(e) => {
+                touchStartX.current = e.touches[0].clientX;
+              }}
+              onTouchEnd={(e) => {
+                if (touchStartX.current === null) return;
+                const dx = e.changedTouches[0].clientX - touchStartX.current;
+                touchStartX.current = null;
+                if (Math.abs(dx) > 40) goToImage(activeImageIdx + (dx < 0 ? 1 : -1));
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'ArrowLeft') {
+                  e.preventDefault();
+                  goToImage(activeImageIdx - 1);
+                } else if (e.key === 'ArrowRight') {
+                  e.preventDefault();
+                  goToImage(activeImageIdx + 1);
+                }
+              }}
+              tabIndex={0}
+              role="group"
+              aria-label={`Product image ${gallery.length ? activeImageIdx + 1 : 0} of ${gallery.length}`}
             >
               {activeImage && !imageError ? (
                 <img
                   src={activeImage}
-                  alt={product.name}
+                  alt={`${product.name}${selectedVariant ? ` — ${variantLabel(selectedVariant)}` : ''}`}
                   onError={() => setImageError(true)}
                   className="w-full h-full object-contain p-4 group-hover:opacity-0 transition-opacity"
                 />
@@ -350,22 +422,62 @@ const ProductDetail: React.FC = () => {
                 className="absolute inset-0 bg-no-repeat bg-[length:200%_200%] pointer-events-none"
                 style={zoomStyle}
               />
+
+              {/* Prev / next controls */}
+              {gallery.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => goToImage(activeImageIdx - 1)}
+                    disabled={activeImageIdx === 0}
+                    aria-label="Previous image"
+                    className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-surface/90 border border-dashboard-section-bg text-text-secondary hover:text-primary shadow-level1 disabled:opacity-0 transition-opacity"
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => goToImage(activeImageIdx + 1)}
+                    disabled={activeImageIdx === gallery.length - 1}
+                    aria-label="Next image"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-surface/90 border border-dashboard-section-bg text-text-secondary hover:text-primary shadow-level1 disabled:opacity-0 transition-opacity"
+                  >
+                    <ChevronRight className="h-5 w-5" />
+                  </button>
+                </>
+              )}
             </div>
 
-            {/* Thumbnails list — only usable images */}
-            {product.images?.filter((img) => isUsableImageUrl(img.url)).length > 1 && (
-              <div className="flex gap-3 overflow-x-auto pb-1">
-                {product.images.filter((img) => isUsableImageUrl(img.url)).map((img, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setActiveImage(img.url)}
-                    className={`h-16 w-16 rounded-card border flex-shrink-0 bg-surface flex items-center justify-center overflow-hidden transition-all ${
-                      activeImage === img.url ? 'border-primary shadow-level1' : 'border-dashboard-section-bg hover:border-text-secondary'
-                    }`}
-                  >
-                    <img src={img.url} alt="thumbnail" className="h-full w-full object-contain p-1" />
-                  </button>
-                ))}
+            {/* Thumbnails — the full cross-variant gallery in order */}
+            {gallery.length > 1 && (
+              <div className="flex gap-3 overflow-x-auto pb-1" role="listbox" aria-label="Product images">
+                {gallery.map((entry, idx) => {
+                  const owner = product.variants?.[entry.variantIndex];
+                  return (
+                    <button
+                      key={`${entry.variantIndex}-${entry.imageIndex}`}
+                      ref={(el) => {
+                        thumbRefs.current[idx] = el;
+                      }}
+                      onClick={() => goToImage(idx)}
+                      role="option"
+                      aria-selected={idx === activeImageIdx}
+                      aria-label={`${variantLabel(owner) || product.name} photo ${entry.imageIndex + 1}`}
+                      className={`h-16 w-16 rounded-card border flex-shrink-0 bg-surface flex items-center justify-center overflow-hidden transition-all ${
+                        idx === activeImageIdx
+                          ? 'border-primary shadow-level1'
+                          : 'border-dashboard-section-bg hover:border-text-secondary'
+                      }`}
+                    >
+                      <img
+                        src={entry.url}
+                        alt=""
+                        loading="lazy"
+                        className="h-full w-full object-contain p-1"
+                      />
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -423,17 +535,16 @@ const ProductDetail: React.FC = () => {
                     Choose Appliance Option
                   </span>
                   <div className="flex flex-wrap gap-2">
-                    {product.variants.map((v) => (
+                    {product.variants.map((v, idx) => (
                       <button
                         key={v.sku}
-                        onClick={() => {
-                          setSelectedVariant(v);
-                          // Variant photo takes over the gallery; fall back to
-                          // the first product image for variants without a usable one
-                          setActiveImage(resolveProductImage(product, v));
-                        }}
+                        // Jumps the gallery to this variant's first image;
+                        // swiping back into another variant's images will
+                        // re-select that variant (bidirectional sync)
+                        onClick={() => selectVariant(idx)}
+                        aria-pressed={idx === selectedVariantIdx}
                         className={`text-xs px-3.5 py-2 rounded-btn border font-medium transition-all ${
-                          selectedVariant?.sku === v.sku
+                          idx === selectedVariantIdx
                             ? 'border-primary bg-primary/5 text-primary font-bold shadow-level1'
                             : 'border-dashboard-section-bg hover:border-text-secondary bg-surface'
                         }`}

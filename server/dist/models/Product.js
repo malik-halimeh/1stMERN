@@ -12,7 +12,7 @@ const VariantSchema = new Schema({
     priceDeltaCents: { type: Number, required: true, default: 0 },
     costPriceCents: { type: Number, required: true, min: 0 },
     lowStockThreshold: { type: Number, required: true, default: 10 },
-    image: { type: ImageSchema, required: false },
+    images: { type: [ImageSchema], default: [] },
 });
 const MetaSchema = new Schema({
     title: { type: String, trim: true },
@@ -40,7 +40,6 @@ const ProductSchema = new Schema({
     },
     basePriceCents: { type: Number, required: true, min: 0 },
     variants: [VariantSchema],
-    images: [ImageSchema],
     ratingAvg: { type: Number, default: 0, min: 0, max: 5 },
     reviewCount: { type: Number, default: 0, min: 0 },
     isTrending: { type: Boolean, default: false, required: true },

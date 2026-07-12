@@ -16,6 +16,22 @@ export const errorHandler = (err, req, res, _next) => {
         code = 'DB_VALIDATION_ERROR';
         message = err.message;
     }
+    else if (err.name === 'MulterError') {
+        // File-upload errors (previously fell through as opaque 500s — e.g. a
+        // photo over the 5 MB limit made "add variant image" fail with no hint)
+        statusCode = 422;
+        code = 'UPLOAD_FAILED';
+        const multerCode = err.code;
+        if (multerCode === 'LIMIT_FILE_SIZE') {
+            message = 'Image file is too large — each image must be 5 MB or smaller.';
+        }
+        else if (multerCode === 'LIMIT_FILE_COUNT' || multerCode === 'LIMIT_UNEXPECTED_FILE') {
+            message = 'Too many image files were uploaded in one request.';
+        }
+        else {
+            message = `Image upload failed: ${err.message}.`;
+        }
+    }
     else if (err.name === 'JsonWebTokenError') {
         statusCode = 401;
         code = 'AUTH_INVALID_TOKEN';

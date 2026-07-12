@@ -78,21 +78,30 @@ async function run() {
   }
 
   let updated = 0;
-  for (const [slug, images] of Object.entries(IMAGE_MAP)) {
-    const res = await Product.updateOne({ slug }, { $set: { images } });
-    if (res.matchedCount === 1) {
-      updated++;
-      console.log(`✓ ${slug} — ${images.length} photos set`);
-    } else {
+  for (const [slug, gallery] of Object.entries(IMAGE_MAP)) {
+    const product = await Product.findOne({ slug });
+    if (!product) {
       console.log(`- ${slug} — not found in DB (skipped)`);
+      continue;
     }
+    // Images live on variants: every variant gets the full photo set with
+    // "its own" photo first (mirrors seed.ts), so variants show distinct
+    // default images and the first variant's first image is the card image.
+    product.variants.forEach((v, i) => {
+      const own = gallery[i % gallery.length];
+      v.images = [own, ...gallery.filter((img) => img !== own)];
+    });
+    product.markModified('variants');
+    await product.save();
+    updated++;
+    console.log(`✓ ${slug} — ${gallery.length} photos set on ${product.variants.length} variant(s)`);
   }
 
   // Report products still on placeholders (created outside the seed)
   const remaining = await Product.find({
     $or: [
-      { 'images.0': { $exists: false } },
-      { 'images.0.url': { $regex: 'placehold\\.co|mock-cloud' } },
+      { 'variants.0.images.0': { $exists: false } },
+      { 'variants.0.images.0.url': { $regex: 'placehold\\.co|mock-cloud' } },
     ],
   }).select('name slug');
   if (remaining.length > 0) {

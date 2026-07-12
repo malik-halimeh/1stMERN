@@ -1,18 +1,19 @@
+// Load .env before any other import: the Cloudinary SDK snapshots its config
+// from process.env at require time, so a later dotenv.config() call left it
+// permanently unconfigured ("Must supply api_key" on every image upload).
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import morgan from 'morgan';
-import dotenv from 'dotenv';
 import { notFound, errorHandler } from './middleware/error.js';
 import { apiRateLimiter } from './middleware/rateLimiter.js';
 import apiRouter from './routes/index.js';
 import connectDB from './config/db.js';
 import LowStockAlert from './models/LowStockAlert.js';
 import { startScheduledJobs } from './services/scheduler.js';
-
-// Load environment variables
-dotenv.config();
+import { migrateVariantImages } from './migrations/variantImages.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -59,6 +60,14 @@ connectDB().then(async () => {
     await LowStockAlert.syncIndexes();
   } catch (err: any) {
     console.error('LowStockAlert index sync failed:', err.message);
+  }
+  // Idempotent: moves legacy product.images / variant.image into the ordered
+  // variant.images array; a no-op once every product has been migrated.
+  try {
+    const migrated = await migrateVariantImages();
+    if (migrated > 0) console.log(`✓ Migrated ${migrated} product(s) to variant images`);
+  } catch (err: any) {
+    console.error('Variant image migration failed:', err.message);
   }
   app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);

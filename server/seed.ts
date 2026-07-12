@@ -323,16 +323,18 @@ const seed = async () => {
     },
   ];
 
-  // Give each variant of a multi-variant product its own photo, reusing the
-  // product's own (verified) gallery images so no new/unverified URLs are
-  // introduced. Single-variant products keep no variant image — for them the
-  // product gallery is the single source of truth.
+  // Variant images are the only image source: each def's verified photo list
+  // is distributed onto its variants — every variant gets the full set with
+  // "its own" photo first, so variants have distinct default images AND
+  // multi-image galleries out of the box. The first variant's first image is
+  // what product cards show storefront-wide.
   for (const prod of productDefs) {
-    if (prod.variants.length >= 2 && prod.images.length > 0) {
-      prod.variants.forEach((v: any, i: number) => {
-        v.image = prod.images[i % prod.images.length];
-      });
-    }
+    const gallery: any[] = prod.images || [];
+    prod.variants.forEach((v: any, i: number) => {
+      const own = gallery.length > 0 ? gallery[i % gallery.length] : null;
+      v.images = own ? [own, ...gallery.filter((img: any) => img !== own)] : [];
+    });
+    delete prod.images; // legacy standalone gallery no longer exists
   }
 
   const products = await Product.insertMany(productDefs);

@@ -9,12 +9,11 @@ const upload = multer({
     storage,
     limits: { fileSize: 5 * 1024 * 1024 }, // 5MB image limit
 });
-// Gallery images + one optional photo per variant. Multer passes JSON
-// requests through untouched, so the PATCH route still accepts plain JSON.
-const productUpload = upload.fields([
-    { name: 'images', maxCount: 5 },
-    { name: 'variantImages', maxCount: 20 },
-]);
+// All product photos are variant images (there is no standalone product
+// gallery). Files arrive in one flat `variantImages` field; each variant's
+// JSON references its files by index. Multer passes JSON requests through
+// untouched, so the PATCH route still accepts plain JSON.
+const productUpload = upload.fields([{ name: 'variantImages', maxCount: 60 }]);
 // Public endpoints
 router.get('/', getProducts);
 router.get('/by-ids', getProductsByIds); // Batch fetch by ObjectId array — public, no auth

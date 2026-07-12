@@ -35,6 +35,14 @@ export const uploadImageBuffer = async (
     };
   }
 
+  // The SDK snapshots process.env into its config the first time it is
+  // touched. If this module was imported before the environment was loaded
+  // (any entrypoint that doesn't import 'dotenv/config' first), that snapshot
+  // is empty — force a re-read so the real credentials apply.
+  if (!cloudinary.config().api_key) {
+    cloudinary.config(true);
+  }
+
   return new Promise((resolve, reject) => {
     const uploadStream = cloudinary.uploader.upload_stream(
       { folder: folderName },

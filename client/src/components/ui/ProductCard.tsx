@@ -14,7 +14,9 @@ export interface ProductVariant {
   priceDeltaCents: number;
   costPriceCents: number;
   lowStockThreshold: number;
-  /** Optional variant-specific photo shown when the variant is selected */
+  /** Ordered variant photos — images[0] is the variant's default image */
+  images?: { url: string; publicId: string }[];
+  /** Legacy single photo — only present in stale localStorage snapshots */
   image?: { url: string; publicId: string };
 }
 
@@ -27,7 +29,8 @@ export interface ProductDoc {
   categoryId: string;
   basePriceCents: number;
   variants: ProductVariant[];
-  images: { url: string; publicId: string }[];
+  /** Legacy standalone gallery — only present in stale localStorage snapshots */
+  images?: { url: string; publicId: string }[];
   ratingAvg: number;
   reviewCount: number;
   isTrending: boolean;
@@ -52,7 +55,8 @@ const ProductCard: React.FC<ProductCardProps> = ({
 }) => {
   const [isHovered, setIsHovered] = useState(false);
 
-  // Hero image for the card: first usable gallery image (mock/broken URLs skipped)
+  // Hero image for the card: first usable image of the first variant
+  // (mock/broken URLs skipped)
   const cardImage = resolveGalleryImage(product);
 
   // Use the first variant as the default showcase
