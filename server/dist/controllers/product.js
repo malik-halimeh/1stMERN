@@ -320,6 +320,17 @@ export const updateProduct = async (req, res, next) => {
         if (meta) {
             product.meta = { ...product.meta, ...meta };
         }
+        // Replace the gallery images only when new files are uploaded. Editing other
+        // fields must not wipe the gallery, so with no files we leave it untouched.
+        const editFilesMap = req.files;
+        const newImageFiles = editFilesMap?.images;
+        if (newImageFiles && newImageFiles.length > 0) {
+            const uploadedImages = [];
+            for (const file of newImageFiles.slice(0, 5)) {
+                uploadedImages.push(await uploadImageBuffer(file.buffer));
+            }
+            product.set('images', uploadedImages);
+        }
         // Track stock updates for audit logs
         let isStockUpdated = false;
         if (variants) {
