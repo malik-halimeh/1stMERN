@@ -9,6 +9,33 @@ import User from '../models/User.js';
 import { uploadImageBuffer } from '../config/cloudinary.js';
 import { AppError } from '../utils/errors.js';
 
+// Accepts image URLs pasted into the admin form — a JSON array string, a
+// comma/newline-separated string, or an array — and returns clean http(s) URLs.
+// URL images carry publicId 'external' so we never try to delete them from Cloudinary.
+const parseImageUrls = (raw: unknown): { url: string; publicId: string }[] => {
+  if (!raw) return [];
+  let list: unknown[] = [];
+  if (Array.isArray(raw)) {
+    list = raw;
+  } else if (typeof raw === 'string' && raw.trim()) {
+    const s = raw.trim();
+    if (s.startsWith('[')) {
+      try {
+        list = JSON.parse(s);
+      } catch {
+        list = [];
+      }
+    } else {
+      list = s.split(/[\n,]+/);
+    }
+  }
+  return list
+    .map((u) => String(u).trim())
+    .filter((u) => /^https?:\/\//i.test(u))
+    .slice(0, 5)
+    .map((url) => ({ url, publicId: 'external' }));
+};
+
 // Helper to trigger stock alerts gracefully
 const checkAndTriggerLowStock = async (
   productId: mongoose.Types.ObjectId,
@@ -265,6 +292,10 @@ export const createProduct = async (req: Request, res: Response, next: NextFunct
       }
     }
 
+    // Also accept image URLs pasted into the form (no Cloudinary upload needed)
+    images.push(...parseImageUrls(req.body.imageUrls));
+    images.splice(5); // cap the gallery at 5
+
     // Per-variant photos (optional, matched by imageSlot index)
     await attachVariantImages(parsedVariants, filesMap?.variantImages || []);
 
@@ -362,16 +393,19 @@ export const updateProduct = async (req: Request, res: Response, next: NextFunct
       product.meta = { ...product.meta, ...meta };
     }
 
-    // Replace the gallery images only when new files are uploaded. Editing other
-    // fields must not wipe the gallery, so with no files we leave it untouched.
+    // Rebuild the gallery from newly uploaded files and/or pasted URLs. If neither
+    // is provided we leave the existing gallery untouched (so editing other fields
+    // never wipes the images).
     const editFilesMap = req.files as UploadedFilesMap;
-    const newImageFiles = editFilesMap?.images;
-    if (newImageFiles && newImageFiles.length > 0) {
-      const uploadedImages: { url: string; publicId: string }[] = [];
+    const newImageFiles = editFilesMap?.images || [];
+    const urlImages = parseImageUrls(req.body.imageUrls);
+    if (newImageFiles.length > 0 || urlImages.length > 0) {
+      const rebuilt: { url: string; publicId: string }[] = [];
       for (const file of newImageFiles.slice(0, 5)) {
-        uploadedImages.push(await uploadImageBuffer(file.buffer));
+        rebuilt.push(await uploadImageBuffer(file.buffer));
       }
-      product.set('images', uploadedImages);
+      rebuilt.push(...urlImages);
+      product.set('images', rebuilt.slice(0, 5));
     }
 
     // Track stock updates for audit logs

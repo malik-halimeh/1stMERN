@@ -41,6 +41,7 @@ interface ProductRow {
   reviewCount?: number;
   isTrending?: boolean;
   isMostSelling?: boolean;
+  images?: { url: string; publicId: string }[];
 }
 
 interface CategoryOption {
@@ -70,6 +71,7 @@ interface ProductForm {
   basePrice: string; // dollars
   variants: VariantForm[];
   images: File[];
+  imageUrlsText: string;
 }
 
 const EMPTY_VARIANT: VariantForm = {
@@ -94,6 +96,7 @@ const EMPTY_FORM: ProductForm = {
   basePrice: '',
   variants: [{ ...EMPTY_VARIANT }],
   images: [],
+  imageUrlsText: '',
 };
 
 const inputClass =
@@ -199,6 +202,7 @@ const AdminProducts = () => {
         imagePreview: v.image?.url || '',
       })),
       images: [],
+      imageUrlsText: '',
     });
     setModalOpen(true);
   };
@@ -263,11 +267,14 @@ const AdminProducts = () => {
       fd.append('variantImages', file);
     }
 
-    // Gallery images are sent on BOTH create and edit. On edit the server only
-    // replaces the gallery when at least one file is present, so an empty picker
-    // preserves the existing images.
+    // Gallery: send uploaded files and/or pasted URLs (both create and edit).
+    // On edit the server only rebuilds the gallery when at least one file or URL
+    // is present, so leaving both empty preserves the existing images.
     for (const file of form.images.slice(0, 5)) {
       fd.append('images', file);
+    }
+    if (form.imageUrlsText.trim()) {
+      fd.append('imageUrls', form.imageUrlsText.trim());
     }
 
     setSaving(true);
@@ -695,28 +702,55 @@ const AdminProducts = () => {
             </div>
           </div>
 
-          {/* Images — create only (the update endpoint doesn't accept files) */}
-          {!editingProduct && (
-            <div>
+          {/* Images — upload files and/or paste image URL(s); works on create + edit */}
+          <div>
+            <label className="block text-label text-text-secondary mb-1">
+              Images (up to 5)
+            </label>
+            {editingProduct && editingProduct.images && editingProduct.images.length > 0 && (
+              <div className="mb-2 flex flex-wrap gap-2">
+                {editingProduct.images.map((img, i) => (
+                  <img
+                    key={i}
+                    src={img.url}
+                    alt=""
+                    className="h-12 w-12 rounded-btn object-cover border border-text-disabled"
+                  />
+                ))}
+              </div>
+            )}
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={(e) =>
+                setForm({ ...form, images: Array.from(e.target.files || []).slice(0, 5) })
+              }
+              className="block w-full text-sm text-text-secondary file:mr-3 file:rounded-btn file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white hover:file:bg-primary-dark"
+            />
+            {form.images.length > 0 && (
+              <p className="mt-1 text-caption text-text-muted">
+                {form.images.length} file{form.images.length === 1 ? '' : 's'} selected
+              </p>
+            )}
+            <div className="mt-2">
               <label className="block text-label text-text-secondary mb-1">
-                Images (up to 5)
+                …or paste image URL(s)
               </label>
-              <input
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={(e) =>
-                  setForm({ ...form, images: Array.from(e.target.files || []).slice(0, 5) })
-                }
-                className="block w-full text-sm text-text-secondary file:mr-3 file:rounded-btn file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white hover:file:bg-primary-dark"
+              <textarea
+                rows={2}
+                value={form.imageUrlsText}
+                onChange={(e) => setForm({ ...form, imageUrlsText: e.target.value })}
+                placeholder="https://example.com/photo.jpg — one per line or comma-separated"
+                className={inputClass}
               />
-              {form.images.length > 0 && (
-                <p className="mt-1 text-caption text-text-muted">
-                  {form.images.length} file{form.images.length === 1 ? '' : 's'} selected
-                </p>
-              )}
             </div>
-          )}
+            <p className="mt-1 text-caption text-text-muted">
+              {editingProduct
+                ? 'Uploading files or pasting URL(s) replaces the current gallery. Leave both empty to keep the current images.'
+                : 'You can upload files and/or paste image URLs.'}
+            </p>
+          </div>
         </div>
       </Modal>
     </div>
