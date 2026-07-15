@@ -115,7 +115,6 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
       role: 'customer',
       isActive: true,
       isEmailVerified: false,
-      authProvider: 'local',
     });
 
     await issueVerificationCode(user);
@@ -191,71 +190,6 @@ export const resendVerification = async (req: Request, res: Response, next: Next
       success: true,
       data: { message: 'If a pending account exists for this email, a new code has been sent.' },
     });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// 1d. POST /api/auth/google — sign in / sign up with a Google ID token.
-// The Google account's email is verified by Google, so no code flow is needed.
-export const googleAuth = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const { credential } = req.body;
-    if (!credential || typeof credential !== 'string') {
-      throw new AppError('AUTH_VALIDATION_FAILED', 'Google credential is required.', 400);
-    }
-
-    const clientId = process.env.GOOGLE_CLIENT_ID;
-    if (!clientId) {
-      throw new AppError('AUTH_GOOGLE_DISABLED', 'Google sign-in is not configured on this server.', 501);
-    }
-
-    // Validate the ID token against Google's tokeninfo endpoint
-    const infoRes = await fetch(
-      `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`
-    );
-    if (!infoRes.ok) {
-      throw new AppError('AUTH_GOOGLE_INVALID', 'Google sign-in token is invalid or expired.', 401);
-    }
-    const info: any = await infoRes.json();
-
-    if (info.aud !== clientId) {
-      throw new AppError('AUTH_GOOGLE_INVALID', 'Google token was issued for a different application.', 401);
-    }
-    if (info.email_verified !== 'true' && info.email_verified !== true) {
-      throw new AppError('AUTH_GOOGLE_UNVERIFIED', 'This Google account has no verified email.', 403);
-    }
-
-    const email = String(info.email).toLowerCase();
-    let user = await User.findOne({ email });
-
-    if (!user) {
-      // First Google sign-in: provision a customer account with an unusable
-      // random password (they authenticate via Google).
-      const randomPw = crypto.randomBytes(32).toString('hex');
-      const salt = await bcrypt.genSalt(12);
-      user = await User.create({
-        name: info.name || email.split('@')[0],
-        email,
-        passwordHash: await bcrypt.hash(randomPw, salt),
-        role: 'customer',
-        isActive: true,
-        isEmailVerified: true,
-        authProvider: 'google',
-      });
-    } else {
-      if (!user.isActive) {
-        throw new AppError('AUTH_ACCOUNT_DISABLED', 'Your account has been deactivated. Please contact support.', 403);
-      }
-      // Google verified ownership of this email — clear any pending code flow
-      if (user.isEmailVerified === false) {
-        user.isEmailVerified = true;
-        user.emailVerificationCodeHash = null;
-        user.emailVerificationExpiresAt = null;
-      }
-    }
-
-    await respondWithSession(res, user, 200);
   } catch (error) {
     next(error);
   }

@@ -5,7 +5,7 @@ import { getGuestCartItems, clearGuestCart } from './guestCart.js';
 type Toast = (message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
 
 /**
- * After any successful sign-in (password, verification code, or Google),
+ * After any successful sign-in (password or verification code),
  * merge the guest localStorage cart and wishlist into the account.
  */
 export const mergeGuestData = async (addToast: Toast) => {

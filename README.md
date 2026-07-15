@@ -149,7 +149,6 @@ CLIENT_URL=http://localhost:5173
 STRIPE_SECRET_KEY=sk_test_mock_key      # real key enables live Stripe test mode
 STRIPE_WEBHOOK_SECRET=                  # whsec_... — required with a real Stripe key
 CLOUDINARY_URL=cloudinary://mock        # real URL enables uploads
-GOOGLE_CLIENT_ID=                       # enables Google sign-in
 GMAIL_USER=                             # + GMAIL_APP_PASSWORD enables real emails
 GMAIL_APP_PASSWORD=
 NODE_ENV=development

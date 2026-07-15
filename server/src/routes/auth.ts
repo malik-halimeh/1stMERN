@@ -3,7 +3,6 @@ import {
   register,
   verifyEmail,
   resendVerification,
-  googleAuth,
   login,
   refresh,
   logout,
@@ -25,7 +24,6 @@ const router = Router();
 router.post('/register', authRateLimiter as any, register);
 router.post('/verify-email', authRateLimiter as any, verifyEmail);
 router.post('/resend-verification', authRateLimiter as any, resendVerification);
-router.post('/google', authRateLimiter as any, googleAuth);
 router.post('/login', authRateLimiter as any, login);
 router.post('/forgot-password', authRateLimiter as any, forgotPassword);
 router.post('/reset-password', authRateLimiter as any, resetPassword);
