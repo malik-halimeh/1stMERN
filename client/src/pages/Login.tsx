@@ -4,7 +4,6 @@ import { useAuth } from '../context/AuthContext.js';
 import { useToast } from '../context/ToastContext.js';
 import Input from '../components/ui/Input.js';
 import Button from '../components/ui/Button.js';
-import GoogleSignInButton from '../components/ui/GoogleSignInButton.js';
 import { ArrowLeft, Lock, Mail } from 'lucide-react';
 import { mergeGuestData } from '../utils/guestMerge.js';
 import { useShop } from '../context/ShopContext.js';
@@ -14,7 +13,7 @@ const Login: React.FC = () => {
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { login, loginWithGoogle } = useAuth();
+  const { login } = useAuth();
   const { refreshShopData } = useShop();
   const { addToast } = useToast();
   const navigate = useNavigate();
@@ -77,28 +76,6 @@ const Login: React.FC = () => {
       addToast(errMsg, 'error');
     } finally {
       setIsSubmitting(false);
-    }
-  };
-
-  // Google sign-in — verified by Google, no code flow needed
-  const handleGoogleCredential = async (credential: string) => {
-    try {
-      const sessionUser = await loginWithGoogle(credential);
-
-      if (sessionUser.role === 'super_admin' || sessionUser.role === 'inventory_manager') {
-        addToast('Signed in with Google successfully.', 'success');
-        navigate('/admin/dashboard', { replace: true });
-        return;
-      }
-
-      addToast('Signed in with Google successfully.', 'success');
-      navigate(from, { replace: true });
-      mergeGuestData(addToast)
-        .then(() => refreshShopData())
-        .catch((err) => console.error('Post-login guest sync failed:', err));
-    } catch (error: any) {
-      const errMsg = error.response?.data?.error?.message || 'Google sign-in failed.';
-      addToast(errMsg, 'error');
     }
   };
 
@@ -186,8 +163,6 @@ const Login: React.FC = () => {
             </Button>
           </div>
         </form>
-
-        <GoogleSignInButton onCredential={handleGoogleCredential} text="signin_with" />
       </div>
     </div>
   );

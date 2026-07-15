@@ -21,14 +21,13 @@ export interface IUser extends Document {
   isActive: boolean;
   // Email ownership verification (signup code flow). Defaults to true so
   // legacy/seeded accounts keep working; new signups explicitly set false
-  // until the emailed code is confirmed. Google sign-ins are pre-verified.
+  // until the emailed code is confirmed.
   isEmailVerified: boolean;
   emailVerificationCodeHash?: string | null;
   emailVerificationExpiresAt?: Date | null;
   // Password reset (forgot-password code flow), same shape as signup codes
   passwordResetCodeHash?: string | null;
   passwordResetExpiresAt?: Date | null;
-  authProvider: 'local' | 'google';
   createdAt: Date;
   updatedAt: Date;
 }
@@ -72,12 +71,6 @@ const UserSchema = new Schema<IUser>(
     emailVerificationExpiresAt: { type: Date, default: null },
     passwordResetCodeHash: { type: String, default: null },
     passwordResetExpiresAt: { type: Date, default: null },
-    authProvider: {
-      type: String,
-      enum: ['local', 'google'],
-      default: 'local',
-      required: true,
-    },
   },
   {
     timestamps: true,

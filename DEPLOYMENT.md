@@ -100,7 +100,7 @@ Generate a secret: `node -e "console.log(require('crypto').randomBytes(48).toStr
 **Do NOT set `PORT`** — Render provides it; `server.ts` already reads `process.env.PORT`.
 
 Optional (otherwise the app runs in safe mock mode): `STRIPE_SECRET_KEY`,
-`STRIPE_WEBHOOK_SECRET`, `CLOUDINARY_URL`, `GOOGLE_CLIENT_ID`, `GMAIL_USER`,
+`STRIPE_WEBHOOK_SECRET`, `CLOUDINARY_URL`, `GMAIL_USER`,
 `GMAIL_APP_PASSWORD`.
 
 Create the service. When live, note the URL (e.g. `https://opticart-api.onrender.com`) and
@@ -126,7 +126,7 @@ test: `https://opticart-api.onrender.com/api/health` → `{"status":"OK", ...}`.
 
 > Note the trailing **`/api`** — `client/src/services/api.ts` expects it. Vite bakes this in
 > **at build time**, so if you change it later, redeploy the client.
-> Optional: `VITE_STRIPE_PUBLISHABLE_KEY`, `VITE_GOOGLE_CLIENT_ID`.
+> Optional: `VITE_STRIPE_PUBLISHABLE_KEY`.
 
 **SPA rewrite (important for React Router):** service → **Redirects/Rewrites** → Add →
 Source `/*`, Destination `/index.html`, Action **Rewrite**. Without this, refreshing on a

@@ -18,7 +18,6 @@ interface AuthContextType {
   register: (name: string, email: string, password: string) => Promise<{ requiresVerification: boolean; email: string }>;
   verifyEmail: (email: string, code: string) => Promise<IUser>;
   resendVerification: (email: string) => Promise<void>;
-  loginWithGoogle: (credential: string) => Promise<IUser>;
   logout: () => Promise<void>;
   forgotPassword: (email: string) => Promise<void>;
   resetPassword: (email: string, code: string, password: string) => Promise<IUser>;
@@ -126,7 +125,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     silentRefresh();
   }, [silentRefresh]);
 
-  // Apply a fresh session returned by login / verify-email / google.
+  // Apply a fresh session returned by login / verify-email.
   // Returns the user so callers can route by role immediately (state updates
   // are async, so reading `user` right after login would still be stale).
   const applySession = (data: { accessToken: string; user: any }): IUser => {
@@ -171,12 +170,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await api.post('/auth/resend-verification', { email });
   };
 
-  // 3d. Google sign-in (GSI ID token) → opens the session
-  const loginWithGoogle = async (credential: string) => {
-    const response = await api.post('/auth/google', { credential });
-    return applySession(response.data.data);
-  };
-
   // 4. Logout Flow
   const logout = async () => {
     try {
@@ -213,7 +206,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         register,
         verifyEmail,
         resendVerification,
-        loginWithGoogle,
         logout,
         forgotPassword,
         resetPassword,

@@ -4,7 +4,6 @@ import { useAuth } from '../context/AuthContext.js';
 import { useToast } from '../context/ToastContext.js';
 import Input from '../components/ui/Input.js';
 import Button from '../components/ui/Button.js';
-import GoogleSignInButton from '../components/ui/GoogleSignInButton.js';
 import { User, Mail, Lock, ShieldCheck } from 'lucide-react';
 import { mergeGuestData } from '../utils/guestMerge.js';
 import { useShop } from '../context/ShopContext.js';
@@ -26,7 +25,7 @@ const Register: React.FC = () => {
   const [isVerifying, setIsVerifying] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
 
-  const { register, verifyEmail, resendVerification, loginWithGoogle } = useAuth();
+  const { register, verifyEmail, resendVerification } = useAuth();
   const { refreshShopData } = useShop();
   const { addToast } = useToast();
   const navigate = useNavigate();
@@ -142,28 +141,6 @@ const Register: React.FC = () => {
       addToast('A new verification code has been sent.', 'success');
     } catch {
       addToast('Could not resend the code. Try again shortly.', 'error');
-    }
-  };
-
-  // Google sign-up: email is already verified by Google
-  const handleGoogleCredential = async (credential: string) => {
-    try {
-      const sessionUser = await loginWithGoogle(credential);
-
-      if (sessionUser.role === 'super_admin' || sessionUser.role === 'inventory_manager') {
-        addToast('Signed in with Google — welcome to OptiCart!', 'success');
-        navigate('/admin/dashboard', { replace: true });
-        return;
-      }
-
-      await mergeGuestData(addToast);
-      await refreshShopData();
-      addToast('Signed in with Google — welcome to OptiCart!', 'success');
-      // Customers land on the storefront, ready to shop
-      navigate('/', { replace: true });
-    } catch (error: any) {
-      const errMsg = error.response?.data?.error?.message || 'Google sign-in failed.';
-      addToast(errMsg, 'error');
     }
   };
 
@@ -288,8 +265,6 @@ const Register: React.FC = () => {
                 </Button>
               </div>
             </form>
-
-            <GoogleSignInButton onCredential={handleGoogleCredential} text="signup_with" />
           </>
         ) : (
           <form className="mt-8 space-y-5" onSubmit={handleVerify}>
