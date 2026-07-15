@@ -18,6 +18,13 @@ import { migrateVariantImages } from './migrations/variantImages.js';
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Render (and most PaaS) forward requests through a single proxy that sets
+// X-Forwarded-For. Express must be told to trust it so req.ip is the real
+// client IP — otherwise express-rate-limit throws ERR_ERL_UNEXPECTED_X_FORWARDED_FOR.
+// Use 1 (trust one hop), not true, which trusts every hop and lets clients
+// spoof their IP to bypass the rate limiter.
+app.set('trust proxy', 1);
+
 // Standard Middlewares
 app.use(helmet());
 app.use(

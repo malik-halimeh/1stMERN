@@ -17,11 +17,23 @@ const getTransporter = (): nodemailer.Transporter | null => {
   const gmailPass = process.env.GMAIL_APP_PASSWORD;
   const smtpHost = process.env.SMTP_HOST;
 
+  // Hosts like Render have no outbound IPv6 route, yet Node resolves SMTP
+  // hosts to an AAAA record first — the connection then hangs until it fails
+  // with ENETUNREACH (~2 min). Force IPv4 and cap every stage with a short
+  // timeout so a failed send falls back to the console stub in seconds.
+  const netOpts = {
+    family: 4 as const,
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 15_000,
+  };
+
   transporter =
     gmailUser && gmailPass
       ? nodemailer.createTransport({
           service: 'gmail',
           auth: { user: gmailUser, pass: gmailPass },
+          ...netOpts,
         })
       : smtpHost
         ? nodemailer.createTransport({
@@ -31,6 +43,7 @@ const getTransporter = (): nodemailer.Transporter | null => {
             auth: process.env.SMTP_USER
               ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
               : undefined,
+            ...netOpts,
           })
         : null;
   return transporter;
