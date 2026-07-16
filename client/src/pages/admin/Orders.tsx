@@ -313,12 +313,12 @@ const AdminOrders = () => {
         </p>
       </div>
 
-      {/* Search by order number (Enter to search, clear + Enter to reset) */}
+      {/* Search by customer name/email, order #, or item (Enter to search, clear + Enter to reset) */}
       <SearchBox
         value={searchInput}
         onChange={setSearchInput}
         onSubmit={applySearch}
-        placeholder="Search order #…"
+        placeholder="Search by customer, order #, or item…"
       />
 
       {/* Status filter chips */}
