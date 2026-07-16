@@ -11,7 +11,7 @@ import { useAuth } from '../context/AuthContext.js';
 import { useShop } from '../context/ShopContext.js';
 import api from '../services/api.js';
 import { getApiErrorMessage } from '../utils/apiError.js';
-import { Filter, SlidersHorizontal, ChevronLeft, ChevronRight, Star, X } from 'lucide-react';
+import { Filter, SlidersHorizontal, ChevronLeft, ChevronRight, Star, X, WifiOff } from 'lucide-react';
 
 interface CategoryDoc {
   _id: string;
@@ -40,7 +40,19 @@ const ProductList: React.FC = () => {
   const [totalPages, setTotalPages] = useState(1);
   
   const [isLoading, setIsLoading] = useState(true);
+  const [fetchFailed, setFetchFailed] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
   const [isMobileFiltersOpen, setIsMobileFiltersOpen] = useState(false);
+
+  const retry = () => setReloadKey((k) => k + 1);
+
+  // Re-fetch automatically once connectivity returns after a failed load
+  useEffect(() => {
+    if (!fetchFailed) return;
+    const handleOnline = () => retry();
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, [fetchFailed]);
 
   // Read current filters from URL search params
   const categoryParam = searchParams.get('category') || '';
@@ -82,7 +94,7 @@ const ProductList: React.FC = () => {
       }
     };
     fetchCategories();
-  }, []);
+  }, [reloadKey]);
 
   // Fetch products catalog on filter alterations
   useEffect(() => {
@@ -105,16 +117,18 @@ const ProductList: React.FC = () => {
           setProducts(res.data.data);
           setTotalProducts(res.data.meta.total);
           setTotalPages(res.data.meta.pages);
+          setFetchFailed(false);
         }
       } catch (err) {
         console.error('Failed to load products:', err);
+        setFetchFailed(true);
         addToast('Error fetching products. Please reload.', 'error');
       } finally {
         setIsLoading(false);
       }
     };
     fetchProducts();
-  }, [categoryParam, minPriceParam, maxPriceParam, ratingParam, sortParam, pageParam, searchParam]);
+  }, [categoryParam, minPriceParam, maxPriceParam, ratingParam, sortParam, pageParam, searchParam, reloadKey]);
 
   // Update query parameters in URL
   const updateFilters = (key: string, value: string) => {
@@ -363,6 +377,16 @@ const ProductList: React.FC = () => {
                 <Skeleton key={i} variant="rect" className="h-80 w-full rounded-card" />
               ))}
             </div>
+          ) : fetchFailed ? (
+            <div className="py-16">
+              <EmptyState
+                icon={<WifiOff className="h-10 w-10 text-text-secondary" />}
+                title="Couldn't load products"
+                description="Check your internet connection and try again."
+                actionLabel="Retry"
+                onAction={retry}
+              />
+            </div>
           ) : products.length === 0 ? (
             <div className="py-16">
               <EmptyState
@@ -389,7 +413,7 @@ const ProductList: React.FC = () => {
           )}
 
           {/* Pagination bar */}
-          {!isLoading && totalPages > 1 && (
+          {!isLoading && !fetchFailed && totalPages > 1 && (
             <div className="flex justify-center items-center gap-3 py-8 border-t border-dashboard-section-bg mt-6 font-sans">
               <Button
                 variant="secondary"

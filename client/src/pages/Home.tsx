@@ -5,11 +5,12 @@ import ProductCard from '../components/ui/ProductCard.js';
 import type { ProductDoc } from '../components/ui/ProductCard.js';
 import Skeleton from '../components/ui/Skeleton.js';
 import Button from '../components/ui/Button.js';
+import EmptyState from '../components/ui/EmptyState.js';
 import { useToast } from '../context/ToastContext.js';
 import { useAuth } from '../context/AuthContext.js';
 import { useShop } from '../context/ShopContext.js';
 import api from '../services/api.js';
-import { ArrowRight, ChevronLeft, ChevronRight, Percent, Award, ShieldCheck } from 'lucide-react';
+import { ArrowRight, ChevronLeft, ChevronRight, Percent, Award, ShieldCheck, WifiOff } from 'lucide-react';
 
 interface CategoryDoc {
   _id: string;
@@ -54,6 +55,19 @@ const Home: React.FC = () => {
   const [loadingRecent, setLoadingRecent] = useState(true);
   const [loadingRecs, setLoadingRecs] = useState(true);
 
+  const [fetchFailed, setFetchFailed] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  const retry = () => setReloadKey((k) => k + 1);
+
+  // Re-fetch automatically once connectivity returns after a failed load
+  useEffect(() => {
+    if (!fetchFailed) return;
+    const handleOnline = () => retry();
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
+  }, [fetchFailed]);
+
   const { addToast } = useToast();
   const { user } = useAuth();
   const { addItemToCart, addItemToWishlist, isInWishlist } = useShop();
@@ -67,14 +81,21 @@ const Home: React.FC = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // Fetch Homepage data
+  // Fetch Homepage data (re-runs on retry / when connectivity returns)
   useEffect(() => {
+    setLoadingCats(true);
+    setLoadingFeatured(true);
+    setLoadingRecent(true);
+    setLoadingRecs(true);
+    setFetchFailed(false);
+
     const fetchCats = async () => {
       try {
         const res = await api.get('/categories');
         if (res.data?.success) setCategories(res.data.data.slice(0, 4));
       } catch (err) {
         console.error('Failed to load categories:', err);
+        setFetchFailed(true);
       } finally {
         setLoadingCats(false);
       }
@@ -87,6 +108,7 @@ const Home: React.FC = () => {
         if (res.data?.success) setFeaturedProducts(res.data.data);
       } catch (err) {
         console.error('Failed to load featured products:', err);
+        setFetchFailed(true);
       } finally {
         setLoadingFeatured(false);
       }
@@ -98,6 +120,7 @@ const Home: React.FC = () => {
         if (res.data?.success) setRecentlyAdded(res.data.data);
       } catch (err) {
         console.error('Failed to load recently added products:', err);
+        setFetchFailed(true);
       } finally {
         setLoadingRecent(false);
       }
@@ -108,6 +131,7 @@ const Home: React.FC = () => {
         const res = await api.get('/product-recommendations');
         if (res.data?.success) setRecommendations(res.data.data.slice(0, 4));
       } catch (err) {
+        // Recommendations section hides itself when empty — no error UI needed
         console.error('Failed to load recommendations:', err);
       } finally {
         setLoadingRecs(false);
@@ -118,7 +142,7 @@ const Home: React.FC = () => {
     fetchFeatured();
     fetchRecent();
     fetchRecs();
-  }, []);
+  }, [reloadKey]);
 
   // Add to Cart handler — updates the shared header badge count (guest + auth)
   const handleAddToCart = async (productId: string, variantSku: string) => {
@@ -154,6 +178,17 @@ const Home: React.FC = () => {
 
   const nextSlide = () => setCurrentSlide((prev) => (prev + 1) % HERO_SLIDES.length);
   const prevSlide = () => setCurrentSlide((prev) => (prev - 1 + HERO_SLIDES.length) % HERO_SLIDES.length);
+
+  // Shown in place of a section's grid when its fetch failed (e.g. offline)
+  const renderLoadError = () => (
+    <EmptyState
+      icon={<WifiOff className="h-10 w-10 text-text-secondary" />}
+      title="Couldn't load products"
+      description="Check your internet connection and try again."
+      actionLabel="Retry"
+      onAction={retry}
+    />
+  );
 
   return (
     <StorefrontLayout>
@@ -214,6 +249,8 @@ const Home: React.FC = () => {
               <Skeleton key={i} variant="rect" className="h-28 w-full rounded-card" />
             ))}
           </div>
+        ) : categories.length === 0 && fetchFailed ? (
+          renderLoadError()
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
             {categories.map((cat) => (
@@ -285,6 +322,8 @@ const Home: React.FC = () => {
               <Skeleton key={i} variant="rect" className="h-72 w-full rounded-card" />
             ))}
           </div>
+        ) : featuredProducts.length === 0 && fetchFailed ? (
+          renderLoadError()
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
             {featuredProducts.map((prod) => (
@@ -319,6 +358,8 @@ const Home: React.FC = () => {
               <Skeleton key={i} variant="rect" className="h-72 w-full rounded-card" />
             ))}
           </div>
+        ) : recentlyAdded.length === 0 && fetchFailed ? (
+          renderLoadError()
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
             {recentlyAdded.map((prod) => (
