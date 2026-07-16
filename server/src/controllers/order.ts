@@ -397,10 +397,23 @@ export const getOrders = async (req: Request, res: Response, next: NextFunction)
       filter.status = statusFilter;
     }
 
-    // Staff quick search by order number (partial, case-insensitive)
+    // Staff flexible search (partial, case-insensitive): matches order number,
+    // item names, or the buyer's name/email. Since the buyer lives on the
+    // referenced User doc, we first resolve matching user ids, then OR them in.
     const q = req.query.q as string | undefined;
     if (isStaff && q?.trim()) {
-      filter.orderNumber = { $regex: escapeRegex(q), $options: 'i' };
+      const rx = { $regex: escapeRegex(q.trim()), $options: 'i' };
+      const matchedUsers = await User.find({ $or: [{ name: rx }, { email: rx }] })
+        .select('_id')
+        .lean();
+      const or: Record<string, unknown>[] = [
+        { orderNumber: rx },
+        { 'items.name': rx },
+      ];
+      if (matchedUsers.length) {
+        or.push({ userId: { $in: matchedUsers.map((u) => u._id) } });
+      }
+      filter.$or = or;
     }
 
     const total = await Order.countDocuments(filter);
