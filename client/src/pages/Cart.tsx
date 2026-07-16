@@ -208,6 +208,9 @@ const Cart: React.FC = () => {
           value: coupon.value,
           discountCents: coupon.discountCents,
         });
+        // Persist so Checkout can forward the code to the order (backend
+        // re-validates it in full — this only carries the code across pages).
+        localStorage.setItem('applied_coupon_code', coupon.code);
         addToast(`Coupon "${coupon.code}" successfully applied!`, 'success');
       }
     } catch (err) {
@@ -220,6 +223,7 @@ const Cart: React.FC = () => {
   const handleRemoveCoupon = () => {
     setAppliedCoupon(null);
     setCouponCode('');
+    localStorage.removeItem('applied_coupon_code');
     addToast('Coupon code removed.', 'info');
   };
 
@@ -241,6 +245,7 @@ const Cart: React.FC = () => {
         } catch {
           // If min value limit fails, strip coupon
           setAppliedCoupon(null);
+          localStorage.removeItem('applied_coupon_code');
           addToast('Coupon removed because cart subtotal fell below limit.', 'warning');
         }
       };
