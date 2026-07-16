@@ -15,7 +15,7 @@ interface NotificationDoc {
   createdAt: string;
 }
 
-const POLL_MS = 60_000;
+const POLL_MS = 20_000;
 
 const timeAgo = (iso: string): string => {
   const secs = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
@@ -51,7 +51,21 @@ const NotificationBell: React.FC = () => {
   useEffect(() => {
     fetchNotifications();
     const timer = setInterval(fetchNotifications, POLL_MS);
-    return () => clearInterval(timer);
+
+    // Refetch the moment the tab regains focus/visibility, so a status change
+    // made elsewhere (e.g. staff advancing an order in another tab) shows up
+    // immediately instead of waiting for the next poll or a manual refresh.
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') fetchNotifications();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', fetchNotifications);
+
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', fetchNotifications);
+    };
   }, [fetchNotifications]);
 
   // Close on outside click

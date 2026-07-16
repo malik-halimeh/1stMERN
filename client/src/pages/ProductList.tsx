@@ -5,7 +5,6 @@ import ProductCard from '../components/ui/ProductCard.js';
 import type { ProductDoc } from '../components/ui/ProductCard.js';
 import Skeleton from '../components/ui/Skeleton.js';
 import Button from '../components/ui/Button.js';
-import Input from '../components/ui/Input.js';
 import EmptyState from '../components/ui/EmptyState.js';
 import { useToast } from '../context/ToastContext.js';
 import { useAuth } from '../context/AuthContext.js';
@@ -188,8 +187,12 @@ const ProductList: React.FC = () => {
     }
   };
 
-  // Sidebar Filters Panel JSX Content
-  const FiltersSidebarContent = () => (
+  // Sidebar Filters Panel JSX Content.
+  // NOTE: this is a render *helper* called as {renderFiltersSidebar()} — NOT
+  // rendered as <Component/>. Rendering it as an element would give it a new
+  // identity on every keystroke, remounting the subtree and stealing focus
+  // from the price inputs after each character typed.
+  const renderFiltersSidebar = () => (
     <div className="flex flex-col gap-6 font-sans">
       {/* Category selection */}
       <div>
@@ -220,33 +223,39 @@ const ProductList: React.FC = () => {
       {/* Price Range selection */}
       <div className="border-t border-dashboard-section-bg pt-6">
         <h5 className="text-xs font-bold text-text-primary uppercase tracking-wider mb-3">Price Range ($)</h5>
-        <form onSubmit={handleApplyPriceFilter} className="flex gap-2 items-center">
-          <Input
-            id="min-price"
-            type="number"
-            min={0}
-            placeholder="Min"
-            value={minPriceInput}
-            onChange={(e) => {
-              const v = sanitizePrice(e.target.value);
-              if (v !== null) setMinPriceInput(v);
-            }}
-            className="w-full text-xs"
-          />
-          <span className="text-text-muted">-</span>
-          <Input
-            id="max-price"
-            type="number"
-            min={0}
-            placeholder="Max"
-            value={maxPriceInput}
-            onChange={(e) => {
-              const v = sanitizePrice(e.target.value);
-              if (v !== null) setMaxPriceInput(v);
-            }}
-            className="w-full text-xs"
-          />
-          <Button type="submit" variant="secondary" className="px-3 text-xs py-1.5 border border-dashboard-section-bg hover:bg-dashboard-section-bg/50">
+        {/* Min/Max share a full-width row; the Go button sits on its own row
+            below so each box is wide enough to show several digits at once. */}
+        <form onSubmit={handleApplyPriceFilter} className="flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <input
+              id="min-price"
+              type="number"
+              min={0}
+              inputMode="numeric"
+              placeholder="Min"
+              value={minPriceInput}
+              onChange={(e) => {
+                const v = sanitizePrice(e.target.value);
+                if (v !== null) setMinPriceInput(v);
+              }}
+              className="w-full min-w-0 px-2 py-2 text-sm border rounded-input bg-surface text-text-primary placeholder:text-text-muted border-text-disabled hover:border-text-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            />
+            <span className="text-text-muted shrink-0">–</span>
+            <input
+              id="max-price"
+              type="number"
+              min={0}
+              inputMode="numeric"
+              placeholder="Max"
+              value={maxPriceInput}
+              onChange={(e) => {
+                const v = sanitizePrice(e.target.value);
+                if (v !== null) setMaxPriceInput(v);
+              }}
+              className="w-full min-w-0 px-2 py-2 text-sm border rounded-input bg-surface text-text-primary placeholder:text-text-muted border-text-disabled hover:border-text-muted focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-colors [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+            />
+          </div>
+          <Button type="submit" variant="secondary" className="w-full text-xs py-1.5 border border-dashboard-section-bg hover:bg-dashboard-section-bg/50">
             Go
           </Button>
         </form>
@@ -304,7 +313,7 @@ const ProductList: React.FC = () => {
           <h4 className="text-h3 font-bold mb-6 text-primary-dark flex items-center gap-2 border-b border-dashboard-section-bg pb-3">
             <Filter className="h-4.5 w-4.5 text-primary" /> Filters
           </h4>
-          <FiltersSidebarContent />
+          {renderFiltersSidebar()}
         </aside>
 
         {/* B. Products Content panel */}
@@ -418,7 +427,7 @@ const ProductList: React.FC = () => {
               </button>
             </div>
             <div className="flex-grow overflow-y-auto p-6">
-              <FiltersSidebarContent />
+              {renderFiltersSidebar()}
             </div>
           </div>
           {/* Dismiss Click Area */}

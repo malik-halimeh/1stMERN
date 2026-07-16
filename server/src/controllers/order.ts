@@ -551,8 +551,11 @@ export const updateOrderStatus = async (req: Request, res: Response, next: NextF
       throw new AppError('ORDER_NOT_FOUND', 'Order not found.', 404);
     }
 
-    // State machine guard: cannot move backwards or change from terminal states
-    const terminalStatuses = ['delivered', 'cancelled', 'refunded'];
+    // State machine guard: cancelled/refunded are terminal — money has moved
+    // (Stripe refund / capture), so they can never be re-opened. 'delivered' is
+    // intentionally NOT terminal: staff can revert an accidental delivery back
+    // to an earlier fulfilment stage.
+    const terminalStatuses = ['cancelled', 'refunded'];
     if (terminalStatuses.includes(order.status)) {
       throw new AppError('ORDER_STATUS_LOCKED', `Order is already in terminal state: ${order.status}.`, 409);
     }
@@ -595,8 +598,13 @@ export const updateOrderStatus = async (req: Request, res: Response, next: NextF
 
     order.status = status as any;
 
-    // Timestamp terminal transitions
-    if (status === 'delivered') order.deliveredAt = new Date();
+    // Timestamp delivery; clear it when an accidental delivery is reverted so
+    // a non-delivered order never carries a stale deliveredAt date.
+    if (status === 'delivered') {
+      order.deliveredAt = new Date();
+    } else if (prevStatus === 'delivered') {
+      order.deliveredAt = undefined;
+    }
     if (status === 'cancelled') order.cancelledAt = new Date();
 
     // Append statusHistory entry

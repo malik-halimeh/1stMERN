@@ -41,16 +41,13 @@ const ALL_STATUSES: OrderStatus[] = [
   'refunded',
 ];
 
-// Forward transitions per the server state machine; cancel allowed from any
-// non-terminal state
-const NEXT_STATUS: Partial<Record<OrderStatus, OrderStatus>> = {
-  pending: 'confirmed',
-  confirmed: 'processing',
-  processing: 'shipped',
-  shipped: 'delivered',
-};
+// Fulfilment pipeline order. Staff can move an order to any OTHER pipeline
+// stage — forward to advance, backward to undo a mis-click. The server allows
+// reverting among these; only cancelled/refunded are terminal (money moved).
+const PIPELINE: OrderStatus[] = ['confirmed', 'processing', 'shipped', 'delivered'];
 
-const TERMINAL: OrderStatus[] = ['delivered', 'cancelled', 'refunded'];
+// Only cancelled/refunded are locked. 'delivered' is revertible (un-deliver).
+const TERMINAL: OrderStatus[] = ['cancelled', 'refunded'];
 
 const STATUS_BADGE: Record<OrderStatus, string> = {
   pending: 'bg-gray-100 text-gray-800 border-gray-200',
@@ -249,8 +246,8 @@ const AdminOrders = () => {
               if (TERMINAL.includes(row.status)) {
                 return <span className="text-caption text-text-muted">Locked</span>;
               }
-              const next = NEXT_STATUS[row.status];
               const isBusy = updatingId === row._id;
+              const currentIdx = PIPELINE.indexOf(row.status);
 
               // Pending orders get a one-click Confirm action
               if (row.status === 'pending') {
@@ -287,7 +284,14 @@ const AdminOrders = () => {
                   <option value="" disabled>
                     {isBusy ? 'Updating…' : 'Move to…'}
                   </option>
-                  {next && <option value={next}>→ {next}</option>}
+                  {PIPELINE.filter((s) => s !== row.status).map((s) => {
+                    const forward = PIPELINE.indexOf(s) > currentIdx;
+                    return (
+                      <option key={s} value={s}>
+                        {forward ? '→' : '←'} {s}{forward ? '' : ' (revert)'}
+                      </option>
+                    );
+                  })}
                   <option value="cancelled">✕ cancelled</option>
                   <option value="refunded">↩ refunded</option>
                 </select>
