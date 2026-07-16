@@ -44,7 +44,16 @@ interface ProductCardProps {
   onAddToWishlist?: (productId: string) => void;
   onQuickView?: (product: ProductDoc) => void;
   isInWishlist?: boolean;
+  /** Total number of times this product has been viewed (from productEvents). */
+  viewCount?: number;
 }
+
+// Compact view formatting: 1234 → "1.2k", 2_500_000 → "2.5M"
+const formatViews = (n: number): string => {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
+  if (n >= 1_000) return (n / 1_000).toFixed(1).replace(/\.0$/, '') + 'k';
+  return String(n);
+};
 
 const ProductCard: React.FC<ProductCardProps> = ({
   product,
@@ -52,6 +61,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
   onAddToWishlist,
   onQuickView,
   isInWishlist = false,
+  viewCount,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
 
@@ -160,21 +170,32 @@ const ProductCard: React.FC<ProductCardProps> = ({
           {product.name}
         </h4>
 
-        {/* Ratings block */}
-        <div className="flex items-center gap-1">
-          <div className="flex text-amber-400">
-            {Array.from({ length: 5 }).map((_, idx) => (
-              <Star
-                key={idx}
-                className={`h-3.5 w-3.5 ${
-                  idx < Math.round(product.ratingAvg || 0)
-                    ? 'fill-current'
-                    : 'text-text-disabled'
-                }`}
-              />
-            ))}
+        {/* Ratings block + views (social proof) on the right */}
+        <div className="flex items-center justify-between gap-1">
+          <div className="flex items-center gap-1">
+            <div className="flex text-amber-400">
+              {Array.from({ length: 5 }).map((_, idx) => (
+                <Star
+                  key={idx}
+                  className={`h-3.5 w-3.5 ${
+                    idx < Math.round(product.ratingAvg || 0)
+                      ? 'fill-current'
+                      : 'text-text-disabled'
+                  }`}
+                />
+              ))}
+            </div>
+            <span className="text-[11px] text-text-muted font-medium">({product.reviewCount || 0})</span>
           </div>
-          <span className="text-[11px] text-text-muted font-medium">({product.reviewCount || 0})</span>
+          {typeof viewCount === 'number' && (
+            <span
+              className="flex items-center gap-1 text-[11px] text-text-muted font-medium"
+              title={`${viewCount.toLocaleString()} ${viewCount === 1 ? 'view' : 'views'}`}
+            >
+              <Eye className="h-3.5 w-3.5" />
+              {formatViews(viewCount)}
+            </span>
+          )}
         </div>
 
         {/* Prices Row */}

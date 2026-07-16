@@ -12,7 +12,7 @@ import { useAuth } from '../context/AuthContext.js';
 import { useShop } from '../context/ShopContext.js';
 import api from '../services/api.js';
 import { flattenVariantGallery } from '../utils/productImage.js';
-import { Star, ShoppingCart, Heart, MessageSquare, ShieldCheck, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Star, ShoppingCart, Heart, MessageSquare, ShieldCheck, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
 
 // Human label for a variant (used for alt text and ARIA)
 const variantLabel = (v?: ProductVariant | null): string =>
@@ -65,6 +65,7 @@ const ProductDetail: React.FC = () => {
   const { addItemToCart, addItemToWishlist, isInWishlist } = useShop();
 
   const [product, setProduct] = useState<ProductDoc | null>(null);
+  const [detailViewCount, setDetailViewCount] = useState<number | null>(null);
   // Gallery and variant selection are bidirectionally synced: picking a
   // variant jumps the gallery to that variant's first image, and navigating
   // the gallery into another variant's images selects that variant. Both
@@ -171,6 +172,26 @@ const ProductDetail: React.FC = () => {
   useEffect(() => {
     setImageError(false);
   }, [activeImage]);
+
+  // Fetch this product's total view count for the "views" indicator.
+  // Non-critical: on failure the indicator simply doesn't render.
+  useEffect(() => {
+    if (!product?._id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.get(`/product-events/views?ids=${product._id}`);
+        if (!cancelled && res.data?.success) {
+          setDetailViewCount(res.data.data?.[product._id] ?? 0);
+        }
+      } catch {
+        /* views are cosmetic — ignore */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [product?._id]);
 
   // Batched view-event tracking: enqueue on product load, flush after 10s or unload
   useEffect(() => {
@@ -505,6 +526,18 @@ const ProductDetail: React.FC = () => {
                 <span className="text-xs font-semibold text-text-secondary">
                   {product.ratingAvg.toFixed(1)} / 5 ({product.reviewCount} customer reviews)
                 </span>
+                {detailViewCount !== null && (
+                  <>
+                    <div className="h-3.5 w-px bg-dashboard-section-bg" />
+                    <span
+                      className="flex items-center gap-1 text-xs font-semibold text-text-secondary"
+                      title={`${detailViewCount.toLocaleString()} total ${detailViewCount === 1 ? 'view' : 'views'}`}
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                      {detailViewCount.toLocaleString()} {detailViewCount === 1 ? 'view' : 'views'}
+                    </span>
+                  </>
+                )}
               </div>
             </div>
 

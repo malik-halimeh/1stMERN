@@ -34,10 +34,14 @@ export interface IAccessTokenPayload {
   role: string;
 }
 
-// 1. Generate Access Token (JWT, 15min TTL)
+// 1. Generate Access Token (JWT). TTL defaults to 15min but can be overridden
+// via JWT_ACCESS_TTL (e.g. '30s') — handy for demoing the silent-refresh cycle
+// without a code change. Read at call time (not import) so it survives the same
+// dotenv-hoisting issue documented for the secret above.
 export const generateAccessToken = (userId: string, role: string): string => {
   const payload: IAccessTokenPayload = { userId, role };
-  return jwt.sign(payload, getAccessSecret(), { expiresIn: '15m' });
+  const ttl = (process.env.JWT_ACCESS_TTL?.trim() || '15m') as jwt.SignOptions['expiresIn'];
+  return jwt.sign(payload, getAccessSecret(), { expiresIn: ttl });
 };
 
 // 2. Verify Access Token

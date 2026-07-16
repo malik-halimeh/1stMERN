@@ -25,7 +25,7 @@ const HERO_SLIDES = [
     subtitle: 'Discover the new generation of OptiHome refrigerators featuring touch monitoring and energy-efficient cooling.',
     cta: 'Explore Refrigerators',
     link: '/products?category=mock-refrigerators',
-    image: 'https://images.unsplash.com/photo-1571175432250-4e467f303a86?auto=format&fit=crop&q=80&w=600',
+    image: 'https://images.unsplash.com/photo-1610557892470-55d9e80c0bce?auto=format&fit=crop&q=80&w=600',
   },
   {
     title: 'Precision Cooking, Redefined',

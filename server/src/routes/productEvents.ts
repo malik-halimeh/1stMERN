@@ -49,4 +49,45 @@ router.post('/batch', async (req: Request, res: Response, next: NextFunction) =>
   }
 });
 
+/**
+ * GET /api/product-events/views?ids=id1,id2,...
+ * Public, read-only. Returns the total number of 'view' events per product as
+ * a { [productId]: count } map. This reads the SAME productEvents data the
+ * recommendation/trending engine scores — it does not add or change any write
+ * path. The storefront uses it to show a "views" count under each product.
+ * Without ?ids, it returns the top viewed products (id -> count) for widgets.
+ */
+router.get('/views', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const idsParam = (req.query.ids as string) || '';
+    const match: Record<string, unknown> = { eventType: 'view' };
+
+    if (idsParam.trim()) {
+      const validIds = idsParam
+        .split(',')
+        .map((s) => s.trim())
+        .filter((id) => mongoose.Types.ObjectId.isValid(id))
+        .map((id) => new mongoose.Types.ObjectId(id));
+
+      if (validIds.length === 0) {
+        return res.status(200).json({ success: true, data: {} });
+      }
+      match.productId = { $in: validIds };
+    }
+
+    const rows = await ProductEvent.aggregate([
+      { $match: match },
+      { $group: { _id: '$productId', count: { $sum: 1 } } },
+    ]);
+
+    // Shape as a plain id -> count map for O(1) lookup on the client
+    const counts: Record<string, number> = {};
+    for (const r of rows) counts[r._id.toString()] = r.count;
+
+    res.status(200).json({ success: true, data: counts });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;

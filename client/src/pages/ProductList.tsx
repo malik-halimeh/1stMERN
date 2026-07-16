@@ -35,6 +35,7 @@ const ProductList: React.FC = () => {
   const { addItemToCart, addItemToWishlist, isInWishlist } = useShop();
 
   const [products, setProducts] = useState<ProductDoc[]>([]);
+  const [viewCounts, setViewCounts] = useState<Record<string, number>>({});
   const [categories, setCategories] = useState<CategoryDoc[]>([]);
   const [totalProducts, setTotalProducts] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -129,6 +130,28 @@ const ProductList: React.FC = () => {
     };
     fetchProducts();
   }, [categoryParam, minPriceParam, maxPriceParam, ratingParam, sortParam, pageParam, searchParam, reloadKey]);
+
+  // Fetch view counts for the products currently on screen (social proof).
+  // Non-critical: a failure just means no view badges — the catalog still works.
+  useEffect(() => {
+    if (products.length === 0) {
+      setViewCounts({});
+      return;
+    }
+    const ids = products.map((p) => p._id).join(',');
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.get(`/product-events/views?ids=${ids}`);
+        if (!cancelled && res.data?.success) setViewCounts(res.data.data || {});
+      } catch {
+        /* views are cosmetic — ignore fetch errors */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [products]);
 
   // Update query parameters in URL
   const updateFilters = (key: string, value: string) => {
@@ -403,6 +426,7 @@ const ProductList: React.FC = () => {
                 <ProductCard
                   key={prod._id}
                   product={prod}
+                  viewCount={viewCounts[prod._id] ?? 0}
                   onAddToCart={handleAddToCart}
                   onAddToWishlist={handleAddToWishlist}
                   isInWishlist={isInWishlist(prod._id)}

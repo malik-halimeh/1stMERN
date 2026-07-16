@@ -5,7 +5,8 @@ import { DataTable, type Column } from '../../components/ui/DataTable';
 import Skeleton from '../../components/ui/Skeleton';
 import EmptyState from '../../components/ui/EmptyState';
 import SearchBox from '../../components/ui/SearchBox';
-import { FileText } from 'lucide-react';
+import { FileText, Download } from 'lucide-react';
+import { exportRowsToCsv, exportToJson, buildExportFilename } from '../../utils/exportData';
 
 interface AuditLogRow {
   _id: string;
@@ -110,6 +111,7 @@ const AdminAuditLogs = () => {
   const [logs, setLogs] = useState<AuditLogRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [exportOpen, setExportOpen] = useState(false);
 
   // Filter as you type. Matching the stringified changeDelta means names and
   // SKUs inside the change payload (e.g. stock updates) are searchable too.
@@ -129,6 +131,36 @@ const AdminAuditLogs = () => {
         .includes(term)
     );
   }, [logs, search]);
+
+  // Export ONLY what the search currently shows (filteredLogs), so the file
+  // always matches the on-screen result set. CSV opens in Excel/Sheets for
+  // ops and finance; JSON keeps the full before/after payload for archival.
+  const runExport = (format: 'csv' | 'json') => {
+    setExportOpen(false);
+    if (filteredLogs.length === 0) return;
+    const filename = buildExportFilename('opticart-audit-logs', search, format);
+    const count = filteredLogs.length;
+    const noun = count === 1 ? 'entry' : 'entries';
+
+    if (format === 'json') {
+      exportToJson(filename, filteredLogs);
+      addToast(`Exported ${count} audit ${noun} to JSON.`, 'success');
+      return;
+    }
+
+    exportRowsToCsv(filename, filteredLogs, [
+      { header: 'Timestamp (ISO)', value: (r) => new Date(r.timestamp).toISOString() },
+      { header: 'Timestamp (Local)', value: (r) => new Date(r.timestamp).toLocaleString() },
+      { header: 'Actor', value: (r) => r.actorName },
+      { header: 'Action', value: (r) => r.actionType.replace(/_/g, ' ') },
+      { header: 'Target Type', value: (r) => r.targetEntityType },
+      { header: 'Target ID', value: (r) => str(r.targetEntityId) },
+      { header: 'Change Summary', value: (r) => formatDelta(r) },
+      { header: 'Before (raw)', value: (r) => JSON.stringify(r.changeDelta?.before ?? null) },
+      { header: 'After (raw)', value: (r) => JSON.stringify(r.changeDelta?.after ?? null) },
+    ]);
+    addToast(`Exported ${count} audit ${noun} to CSV.`, 'success');
+  };
 
   useEffect(() => {
     const fetchLogs = async () => {
@@ -208,12 +240,59 @@ const AdminAuditLogs = () => {
         </p>
       </div>
 
-      {/* Filter as you type */}
-      <SearchBox
-        value={search}
-        onChange={setSearch}
-        placeholder="Search actor, action, SKU…"
-      />
+      {/* Filter as you type, and export exactly the filtered result set */}
+      <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+        <div className="flex-grow">
+          <SearchBox
+            value={search}
+            onChange={setSearch}
+            placeholder="Search actor, action, SKU…"
+          />
+        </div>
+        <div className="relative flex-shrink-0">
+          <button
+            onClick={() => setExportOpen((o) => !o)}
+            disabled={filteredLogs.length === 0}
+            title={
+              search.trim()
+                ? `Export the ${filteredLogs.length} entries matching "${search.trim()}"`
+                : `Export all ${filteredLogs.length} entries`
+            }
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-btn text-sm font-semibold bg-primary text-white hover:bg-primary-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            <Download className="h-4 w-4" />
+            Export
+            <span className="text-[11px] font-bold bg-white/20 rounded-full px-2 py-0.5">
+              {filteredLogs.length}
+            </span>
+          </button>
+          {exportOpen && (
+            <>
+              {/* Click-away backdrop */}
+              <div className="fixed inset-0 z-10" onClick={() => setExportOpen(false)} />
+              <div className="absolute right-0 mt-2 w-60 z-20 bg-surface border border-text-disabled rounded-card shadow-level2 overflow-hidden">
+                <div className="px-3 py-2 text-caption text-text-muted border-b border-dashboard-section-bg">
+                  {search.trim() ? 'Exporting current search' : 'Exporting all entries'}
+                </div>
+                <button
+                  onClick={() => runExport('csv')}
+                  className="w-full text-left px-3 py-2.5 text-sm text-text-primary hover:bg-dashboard-section-bg/50 transition-colors"
+                >
+                  <span className="font-semibold">CSV</span>
+                  <span className="block text-caption text-text-muted">Opens in Excel / Google Sheets</span>
+                </button>
+                <button
+                  onClick={() => runExport('json')}
+                  className="w-full text-left px-3 py-2.5 text-sm text-text-primary hover:bg-dashboard-section-bg/50 transition-colors border-t border-dashboard-section-bg"
+                >
+                  <span className="font-semibold">JSON</span>
+                  <span className="block text-caption text-text-muted">Full detail incl. before/after</span>
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
 
       {loading ? (
         <div className="space-y-3">
