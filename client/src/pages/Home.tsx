@@ -19,6 +19,21 @@ interface CategoryDoc {
   subcategories: any[];
 }
 
+// Pick a fitting icon per category from keywords in its name/slug, so each
+// tile is distinct (categories are dynamic, so we can't hardcode one each).
+const categoryEmoji = (cat: CategoryDoc): string => {
+  const s = `${cat.name} ${cat.slug}`.toLowerCase();
+  if (/(cook|oven|stove|induction|range|\bhob\b|cooktop|grill)/.test(s)) return '🍳';
+  if (/(cool|fridge|refriger|freezer)/.test(s)) return '❄️';
+  if (/(laundr|wash|dryer)/.test(s)) return '🧺';
+  if (/(dish)/.test(s)) return '🍽️';
+  if (/(air|condition|hvac|climate|heat|fan)/.test(s)) return '🌬️';
+  if (/(clean|vacuum)/.test(s)) return '🧹';
+  if (/(coffee|kettle|blender|toaster|microwave|small)/.test(s)) return '☕';
+  if (/(tv|screen|entertain|electronic|media)/.test(s)) return '📺';
+  return '🏠';
+};
+
 const HERO_SLIDES = [
   {
     title: 'Smart Cooling, Engineered for Life',
@@ -259,7 +274,7 @@ const Home: React.FC = () => {
                 to={`/products?category=${cat.slug}`}
                 className="bg-surface border border-dashboard-section-bg p-6 rounded-card text-center hover:border-secondary shadow-level1 hover:shadow-level2 transition-all duration-300 group"
               >
-                <div className="text-3xl mb-3 group-hover:scale-110 transition-transform">🧊</div>
+                <div className="text-3xl mb-3 group-hover:scale-110 transition-transform">{categoryEmoji(cat)}</div>
                 <span className="text-sm font-semibold text-text-primary group-hover:text-primary transition-colors block">
                   {cat.name}
                 </span>
