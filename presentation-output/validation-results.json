@@ -1,0 +1,210 @@
+{
+  "status": "PASSED",
+  "project": "OptiCart",
+  "slide_count": 6,
+  "word_count": 432,
+  "estimated_total_seconds": 214.5,
+  "speaker_notes": "PASSED",
+  "checks": [
+    {
+      "name": "Canonical slide count",
+      "status": "PASSED",
+      "detail": "6 slides"
+    },
+    {
+      "name": "Per-slide word counts",
+      "status": "PASSED",
+      "detail": "[60, 77, 72, 73, 69, 81]"
+    },
+    {
+      "name": "Total word count",
+      "status": "PASSED",
+      "detail": "432 words"
+    },
+    {
+      "name": "Spoken timing",
+      "status": "PASSED",
+      "detail": "202.5 seconds"
+    },
+    {
+      "name": "Total timing",
+      "status": "PASSED",
+      "detail": "214.5 seconds (3:35)"
+    },
+    {
+      "name": "Contiguous presenter order",
+      "status": "PASSED",
+      "detail": "Malik → Mahmod → Haya"
+    },
+    {
+      "name": "HTML canonical embedding",
+      "status": "PASSED",
+      "detail": "Embedded data exactly matches presentation-data.json"
+    },
+    {
+      "name": "HTML slide 1 synchronization",
+      "status": "PASSED",
+      "detail": "Title, presenter, exact script, duration, and cue found"
+    },
+    {
+      "name": "HTML slide 2 synchronization",
+      "status": "PASSED",
+      "detail": "Title, presenter, exact script, duration, and cue found"
+    },
+    {
+      "name": "HTML slide 3 synchronization",
+      "status": "PASSED",
+      "detail": "Title, presenter, exact script, duration, and cue found"
+    },
+    {
+      "name": "HTML slide 4 synchronization",
+      "status": "PASSED",
+      "detail": "Title, presenter, exact script, duration, and cue found"
+    },
+    {
+      "name": "HTML slide 5 synchronization",
+      "status": "PASSED",
+      "detail": "Title, presenter, exact script, duration, and cue found"
+    },
+    {
+      "name": "HTML slide 6 synchronization",
+      "status": "PASSED",
+      "detail": "Title, presenter, exact script, duration, and cue found"
+    },
+    {
+      "name": "PowerPoint slide count",
+      "status": "PASSED",
+      "detail": "6 slide XML parts"
+    },
+    {
+      "name": "PowerPoint slide 1 title",
+      "status": "PASSED",
+      "detail": "One connected commerce operation"
+    },
+    {
+      "name": "PowerPoint slide 1 presenter",
+      "status": "PASSED",
+      "detail": "Malik"
+    },
+    {
+      "name": "PowerPoint slide 1 audience-only content",
+      "status": "PASSED",
+      "detail": "No script or presenter cue in audience-facing slide"
+    },
+    {
+      "name": "PowerPoint slide 2 title",
+      "status": "PASSED",
+      "detail": "Two sides. One product."
+    },
+    {
+      "name": "PowerPoint slide 2 presenter",
+      "status": "PASSED",
+      "detail": "Malik"
+    },
+    {
+      "name": "PowerPoint slide 2 audience-only content",
+      "status": "PASSED",
+      "detail": "No script or presenter cue in audience-facing slide"
+    },
+    {
+      "name": "PowerPoint slide 3 title",
+      "status": "PASSED",
+      "detail": "Make buying easier to complete"
+    },
+    {
+      "name": "PowerPoint slide 3 presenter",
+      "status": "PASSED",
+      "detail": "Mahmod"
+    },
+    {
+      "name": "PowerPoint slide 3 audience-only content",
+      "status": "PASSED",
+      "detail": "No script or presenter cue in audience-facing slide"
+    },
+    {
+      "name": "PowerPoint slide 4 title",
+      "status": "PASSED",
+      "detail": "Turn demand into coordinated action"
+    },
+    {
+      "name": "PowerPoint slide 4 presenter",
+      "status": "PASSED",
+      "detail": "Mahmod"
+    },
+    {
+      "name": "PowerPoint slide 4 audience-only content",
+      "status": "PASSED",
+      "detail": "No script or presenter cue in audience-facing slide"
+    },
+    {
+      "name": "PowerPoint slide 5 title",
+      "status": "PASSED",
+      "detail": "See what needs attention—and what is working"
+    },
+    {
+      "name": "PowerPoint slide 5 presenter",
+      "status": "PASSED",
+      "detail": "Haya"
+    },
+    {
+      "name": "PowerPoint slide 5 audience-only content",
+      "status": "PASSED",
+      "detail": "No script or presenter cue in audience-facing slide"
+    },
+    {
+      "name": "PowerPoint slide 6 title",
+      "status": "PASSED",
+      "detail": "Built as a product, not a page"
+    },
+    {
+      "name": "PowerPoint slide 6 presenter",
+      "status": "PASSED",
+      "detail": "Haya"
+    },
+    {
+      "name": "PowerPoint slide 6 audience-only content",
+      "status": "PASSED",
+      "detail": "No script or presenter cue in audience-facing slide"
+    },
+    {
+      "name": "Slide 4 data label",
+      "status": "PASSED",
+      "detail": "Dashboard figures identified as test data"
+    },
+    {
+      "name": "Slide 5 analytics disclaimer",
+      "status": "PASSED",
+      "detail": "Analytics figures explicitly disclaimed"
+    },
+    {
+      "name": "PowerPoint speaker-note validation",
+      "status": "PASSED",
+      "detail": "0 notes parts; 0 meaningful note strings"
+    },
+    {
+      "name": "Screenshot-to-PowerPoint provenance",
+      "status": "PASSED",
+      "detail": "Embedded source matches: ui-admin-dashboard.png, ui-analytics.png, ui-storefront.png"
+    },
+    {
+      "name": "Rendered slide QA set",
+      "status": "PASSED",
+      "detail": "6 slides at 1600×900"
+    },
+    {
+      "name": "Screenshot integrity: ui-admin-dashboard.png",
+      "status": "PASSED",
+      "detail": "Actual rendered UI capture, 1800×1125"
+    },
+    {
+      "name": "Screenshot integrity: ui-analytics.png",
+      "status": "PASSED",
+      "detail": "Actual rendered UI capture, 1800×1125"
+    },
+    {
+      "name": "Screenshot integrity: ui-storefront.png",
+      "status": "PASSED",
+      "detail": "Actual rendered UI capture, 1800×1125"
+    }
+  ]
+}

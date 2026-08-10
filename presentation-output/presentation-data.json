@@ -1,0 +1,118 @@
+{
+  "schema_version": "1.0",
+  "project_name": "OptiCart",
+  "presentation_title": "One Connected Commerce Operation",
+  "audience": "Investors, company owners, and business representatives",
+  "speaking_rate_wpm": 128,
+  "transition_allowance_seconds": 12,
+  "total_word_count": 432,
+  "estimated_spoken_seconds": 202.5,
+  "estimated_total_seconds": 214.5,
+  "estimated_total_runtime": "3:35",
+  "slides": [
+    {
+      "slide_number": 1,
+      "slide_title": "One connected commerce operation",
+      "slide_purpose": "Introduce OptiCart as a business product connecting the buying journey with operations.",
+      "primary_business_message": "OptiCart connects customer commerce and business control in one platform.",
+      "presenter": "Malik",
+      "script": "OptiCart is an appliance commerce platform built around a simple idea: the customer experience and the business operation should work as one system. Customers need a clear path from discovery to delivery. Companies need control behind that journey. We built both sides, so every order can move from interest to purchase, fulfillment, and business insight without breaking into disconnected tools.",
+      "word_count": 60,
+      "estimated_speaking_seconds": 28.1,
+      "estimated_duration_label": "0:28",
+      "slide_change_cue": "Pause after “disconnected tools,” then advance to slide 2.",
+      "handoff": null,
+      "next_presenter": "Malik",
+      "visual_layout": "cover_storefront",
+      "visual_references": [
+        { "id": "storefront", "path": "ui-storefront.png", "source": "Actual React storefront rendered locally with isolated representative API fixtures" }
+      ]
+    },
+    {
+      "slide_number": 2,
+      "slide_title": "Two sides. One product.",
+      "slide_purpose": "Frame the connected customer and operational needs that OptiCart addresses.",
+      "primary_business_message": "Shared commerce data gives customers continuity and staff the control they need.",
+      "presenter": "Malik",
+      "script": "For a customer, friction appears when products are hard to compare, saved choices disappear, or order updates are unclear. For a company, the same journey creates different questions: What is selling? Which orders need action? What stock is running low? OptiCart connects these needs through shared product, customer, and order information. That gives the buyer continuity, while staff receive the controls and visibility that match their responsibilities. Mahmod will show how those two sides work in practice.",
+      "word_count": 77,
+      "estimated_speaking_seconds": 36.1,
+      "estimated_duration_label": "0:36",
+      "slide_change_cue": "On “work in practice,” advance to slide 3 and look toward Mahmod.",
+      "handoff": "Malik → Mahmod",
+      "next_presenter": "Mahmod",
+      "visual_layout": "two_pillars",
+      "visual_references": []
+    },
+    {
+      "slide_number": 3,
+      "slide_title": "Make buying easier to complete",
+      "slide_purpose": "Show the implemented end-to-end customer journey and explain its commercial value.",
+      "primary_business_message": "OptiCart reduces breaks between discovery, purchase, and post-purchase service.",
+      "presenter": "Mahmod",
+      "script": "On the customer side, OptiCart supports the full buying path. Visitors can browse categories, search and filter products, compare variants, read verified-purchase reviews, and receive recommendations. A guest can save a wishlist or build a cart, then keep that work when signing in. Coupons, checkout, order history, status notifications, and feedback continue the journey after the product page. The business value is straightforward: fewer unnecessary breaks between interest, purchase, and ongoing service.",
+      "word_count": 72,
+      "estimated_speaking_seconds": 33.8,
+      "estimated_duration_label": "0:34",
+      "slide_change_cue": "Advance after “ongoing service.”",
+      "handoff": null,
+      "next_presenter": "Mahmod",
+      "visual_layout": "customer_journey",
+      "visual_references": [
+        { "id": "storefront", "path": "ui-storefront.png", "source": "Actual React storefront rendered locally with isolated representative API fixtures" }
+      ]
+    },
+    {
+      "slide_number": 4,
+      "slide_title": "Turn demand into coordinated action",
+      "slide_purpose": "Demonstrate operational control across orders, stock, procurement, roles, and accountability.",
+      "primary_business_message": "The platform converts customer demand into visible, controlled operational work.",
+      "presenter": "Mahmod",
+      "script": "The same order becomes coordinated work for the business. Staff can manage the catalog and variants, move orders through fulfillment, and communicate status changes to customers. Low-stock thresholds create alerts before availability becomes a surprise. Recording a supplier purchase increases inventory and captures procurement cost in the same workflow. Different roles receive appropriate controls, while audit logs provide accountability for administrative actions. Haya will now show how this operational data supports better decisions.",
+      "word_count": 73,
+      "estimated_speaking_seconds": 34.2,
+      "estimated_duration_label": "0:34",
+      "slide_change_cue": "On “better decisions,” advance to slide 5 and hand over to Haya.",
+      "handoff": "Mahmod → Haya",
+      "next_presenter": "Haya",
+      "visual_layout": "operations_control",
+      "visual_references": [
+        { "id": "dashboard", "path": "ui-admin-dashboard.png", "source": "Actual React admin dashboard rendered locally with isolated representative API fixtures" }
+      ]
+    },
+    {
+      "slide_number": 5,
+      "slide_title": "See what needs attention—and what is working",
+      "slide_purpose": "Show implemented management analytics and position them as decision support.",
+      "primary_business_message": "OptiCart turns platform activity into practical visibility for planning and prioritization.",
+      "presenter": "Haya",
+      "script": "OptiCart also turns activity into usable management visibility. The analytics area brings together delivered revenue, order volume, average order value, customer growth, top-selling SKUs, and supplier purchase spend. These are implemented views over actual platform data; the numbers shown here are representative local test data, not commercial results. A company could use this visibility to prioritize fulfillment, understand demand, plan purchasing, and review performance without manually combining separate records.",
+      "word_count": 69,
+      "estimated_speaking_seconds": 32.3,
+      "estimated_duration_label": "0:32",
+      "slide_change_cue": "Brief pause after “separate records,” then advance to slide 6.",
+      "handoff": null,
+      "next_presenter": "Haya",
+      "visual_layout": "analytics_visibility",
+      "visual_references": [
+        { "id": "analytics", "path": "ui-analytics.png", "source": "Actual React analytics view rendered locally with isolated representative API fixtures; figures are illustrative test data" }
+      ]
+    },
+    {
+      "slide_number": 6,
+      "slide_title": "Built as a product, not a page",
+      "slide_purpose": "Close on the combined product value and the team’s readiness for real project work.",
+      "primary_business_message": "The connected workflows demonstrate product thinking, complete delivery, and professional readiness.",
+      "presenter": "Haya",
+      "script": "What makes OptiCart meaningful is not one isolated feature. It is the connection between a customer experience that can complete a sale and an operating system that can fulfill, monitor, and learn from it. The platform was built as a complete MERN application, with real workflows, clear responsibilities, notifications, payments, and stored business data. This project demonstrates how our team turns a practical need into a coherent product—and how we are ready to contribute to real business software. Thank you.",
+      "word_count": 81,
+      "estimated_speaking_seconds": 38.0,
+      "estimated_duration_label": "0:38",
+      "slide_change_cue": "Hold the final slide. Pause, make eye contact, then say “Thank you.”",
+      "handoff": "Presentation complete",
+      "next_presenter": null,
+      "visual_layout": "closing_product",
+      "visual_references": []
+    }
+  ]
+}
